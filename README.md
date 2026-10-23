@@ -380,7 +380,7 @@ Dự án này được cấp phép theo [MIT License](LICENSE).
 ## Liên hệ
 
 - Project: RentFlow
-- Email: hello@rentflow.example
+- Email: hoangphung.tech@gmail.com
 - GitHub: https://github.com/your-org/rentflow
 
 ---
