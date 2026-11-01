@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  // moduleFormat = "cjs"   // bỏ dấu // nếu project NestJS dùng CommonJS
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Char(36)
+  email        String     @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  status       UserStatus @default(ACTIVE)
+  roleId       String     @db.Char(36)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  role             Role                 @relation(fields: [roleId], references: [id])
+  propertyAccesses UserPropertyAccess[]
+  auditLogs        AuditLog[]
+}
+
+model Role {
+  id          String @id @default(uuid()) @db.Char(36)
+  name        String @unique
+  permissions Json
+  users       User[]
+}
+
+model UserPropertyAccess {
+  id         String   @id @default(uuid()) @db.Char(36)
+  userId     String   @db.Char(36)
+  propertyId String   @db.Char(36)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, propertyId])
+  @@index([propertyId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Char(36)
+  actorId    String   @db.Char(36)
+  entityType String   @db.VarChar(50)
+  entityId   String   @db.VarChar(64)
+  action     String   @db.VarChar(50)
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
