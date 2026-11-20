@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================================
+// PHAN 1: STUB TAM DE CHAY DOC LAP (Hieu & Phung se thay the khi merge)
+// =========================================================================
+
+enum UserRoleStub {
+  OWNER
+  STAFF
+  ACCOUNTANT
+  RENTER
+}
+
+model User {
+  id        String       @id @default(uuid()) @db.Char(36)
+  email     String       @unique
+  fullName  String
+  role      UserRoleStub @default(OWNER)
+  createdAt DateTime     @default(now())
+
+  ownedProperties Property[]     @relation("PropertyOwner")
+  recordedMeters  MeterReading[] @relation("MeterRecorder")
+}
+
+enum LeaseStatusStub {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+model Lease {
+  id                 String          @id @default(uuid()) @db.Char(36)
+  roomId             String          @db.Char(36)
+  rentAmount         Decimal         @db.Decimal(12, 2)
+  billingCycleMonths Int             @default(1)
+  depositAgreed      Decimal         @db.Decimal(12, 2)
+  depositReceived    Decimal         @default(0) @db.Decimal(12, 2)
+  startDate          DateTime
+  endDate            DateTime
+  status             LeaseStatusStub @default(ACTIVE)
+  createdAt          DateTime        @default(now())
+
+  room     Room      @relation(fields: [roomId], references: [id])
+  invoices Invoice[]
+
+  @@index([roomId, status])
+}
+
+// =========================================================================
+// PHAN 2: 6 MODEL CHINH CUA PHAN NGUYEN VU
+// =========================================================================
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+}
+
+enum UtilityServiceType {
+  ELECTRICITY
+  WATER
+  SERVICE
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum InvoiceItemType {
+  RENT
+  ELECTRICITY
+  WATER
+  SERVICE
+  OTHER
+}
+
+model Property {
+  id          String   @id @default(uuid()) @db.Char(36)
+  ownerId     String   @db.Char(36)
+  name        String   @db.VarChar(150)
+  address     String   @db.VarChar(255)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner        User          @relation("PropertyOwner", fields: [ownerId], references: [id])
+  rooms        Room[]
+  utilityRates UtilityRate[]
+
+  @@index([ownerId])
+}
+
+model Room {
+  id            String     @id @default(uuid()) @db.Char(36)
+  propertyId    String     @db.Char(36)
+  roomCode      String     @db.VarChar(30)
+  baseRentPrice Decimal    @db.Decimal(12, 2)
+  maxOccupants  Int        @default(2)
+  status        RoomStatus @default(AVAILABLE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  meterReadings MeterReading[]
+  leases        Lease[]
+
+  @@unique([propertyId, roomCode])
+  @@index([propertyId, status])
+}
+
+model UtilityRate {
+  id            String             @id @default(uuid()) @db.Char(36)
+  propertyId    String             @db.Char(36)
+  serviceType   UtilityServiceType
+  serviceName   String             @db.VarChar(100)
+  unit          String             @db.VarChar(30)
+  unitPrice     Decimal            @db.Decimal(12, 2)
+  effectiveFrom DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, serviceType, effectiveFrom])
+}
+
+model MeterReading {
+  id            String   @id @default(uuid()) @db.Char(36)
+  roomId        String   @db.Char(36)
+  billingPeriod String   @db.Char(7)
+  electricOld   Decimal  @db.Decimal(10, 2)
+  electricNew   Decimal  @db.Decimal(10, 2)
+  waterOld      Decimal  @db.Decimal(10, 2)
+  waterNew      Decimal  @db.Decimal(10, 2)
+  meterImageUrl String?  @db.VarChar(255)
+  recordedById  String   @db.Char(36)
+  recordedAt    DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  room       Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  recordedBy User @relation("MeterRecorder", fields: [recordedById], references: [id])
+
+  @@unique([roomId, billingPeriod])
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Char(36)
+  leaseId         String        @db.Char(36)
+  billingPeriod   String        @db.Char(7)
+  activeFlag      Int?          @default(1)
+  idempotencyKey  String?       @unique @db.VarChar(100)
+  totalAmount     Decimal       @db.Decimal(12, 2)
+  paidAmount      Decimal       @default(0) @db.Decimal(12, 2)
+  remainingAmount Decimal       @db.Decimal(12, 2)
+  dueDate         DateTime
+  status          InvoiceStatus @default(DRAFT)
+  issuedAt        DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?       @db.VarChar(255)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  lease Lease         @relation(fields: [leaseId], references: [id])
+  items InvoiceItem[]
+
+  @@unique([leaseId, billingPeriod, activeFlag])
+  @@index([status, dueDate])
+}
+
+model InvoiceItem {
+  id                String          @id @default(uuid()) @db.Char(36)
+  invoiceId         String          @db.Char(36)
+  itemType          InvoiceItemType
+  description       String          @db.VarChar(200)
+  quantity          Decimal         @db.Decimal(10, 2)
+  snapshotUnitPrice Decimal         @db.Decimal(12, 2)
+  lineTotal         Decimal         @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+// =========================================================================
+// PHAN 3: BANG PHUC VU LANDING PAGE (GOI V05)
+// =========================================================================
+
+model TrialLead {
+  id        String   @id @default(uuid()) @db.Char(36)
+  fullName  String   @db.VarChar(120)
+  contact   String   @db.VarChar(120)
+  roomCount Int?
+  note      String?  @db.Text
+  status    String   @default("NEW") @db.VarChar(30)
+  createdAt DateTime @default(now())
+}
