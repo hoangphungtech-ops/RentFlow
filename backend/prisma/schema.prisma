@@ -25,6 +25,16 @@ model User {
   role      UserRoleStub @default(OWNER)
   createdAt DateTime     @default(now())
 
+  username String? @unique @db.VarChar(32)
+  managedById String? @db.Char(36)
+  managedBy User? @relation("AccountManager", fields: [managedById], references: [id])
+  managedAccounts User[] @relation("AccountManager")
+  lockedAt DateTime?
+  emailVerifiedAt DateTime?
+  isDemo Boolean @default(false)
+  accountCodes AccountCode[]
+  recoveryRequestedAt DateTime?
+
   passwordHash String? @db.VarChar(150)
   sessions Session[]
   deletionRequest AccountDeletionRequest?
@@ -337,4 +347,18 @@ model AccountDeletionRequest {
   status String @default("PENDING") @db.VarChar(30)
   requestedAt DateTime @default(now())
   reviewedAt DateTime?
+}
+
+enum AccountCodeKind {
+  INVITE
+  RESET
+}
+
+model AccountCode {
+  hash String @id @db.Char(64)
+  userId String @db.Char(36)
+  kind AccountCodeKind
+  expiresAt DateTime
+  user User @relation(fields: [userId], references: [id])
+  @@unique([userId, kind])
 }

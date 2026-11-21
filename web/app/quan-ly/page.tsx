@@ -1,8 +1,9 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { Action, api, field, select, vnd } from '../shared'
+import { Action, api, ApiError, field, select, vnd } from '../shared'
+import { AccountSettings } from './accounts'
 import { AdminForms } from './forms'
 
 type Person = { id: string; fullName: string; propertyId: string }
@@ -17,7 +18,7 @@ type Ledger = Lease & {
   settlement: { received: string; deduction: string; debtOffset: string; refund: string; reason: string; invoiceId?: string } | null
 }
 export type Overview = {
-  actor: { fullName: string; role: string }; tenants: Person[]; leases: Lease[]; invoices: Invoice[];
+  actor: { fullName: string; role: string; email: string; username: string | null }; tenants: Person[]; leases: Lease[]; invoices: Invoice[];
   properties: { id: string; name: string; address: string; rooms: Room[]; utilityRates: { id: string; serviceName: string; unitPrice: string; unit: string; effectiveFrom: string }[] }[];
   notifications: { id: string; message: string }[]
 }
@@ -26,7 +27,8 @@ const date = (value: string) => new Date(value).toLocaleDateString('vi-VN', { ti
 const labels: Record<string, string> = { AVAILABLE: 'Trống', OCCUPIED: 'Đang thuê', MAINTENANCE: 'Bảo trì', ACTIVE: 'Đang thuê', DRAFT: 'Nháp', EXPIRED: 'Hết hạn', TERMINATED: 'Đã trả phòng', CASH: 'Tiền mặt', TRANSFER: 'Chuyển khoản', DEPOSIT: 'Bù cọc', PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', REVERSED: 'Đã đảo' }
 
 export default function Dashboard() {
-  const [token, setToken] = useState('')
+  const [signedIn, setSignedIn] = useState(false)
+  const token = ''
   const [overview, setOverview] = useState<Overview>()
   const [ledger, setLedger] = useState<Ledger>()
   const [current, setCurrent] = useState('')
@@ -36,12 +38,23 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const paymentRequest = useRef(new Map<string, string>())
-  useEffect(() => { setToken(sessionStorage.getItem('rentflow-session') ?? ''); setReady(true) }, [])
-  useEffect(() => {
-    if (!token) return
+  async function refresh() {
     setBusy(true)
-    api<Overview>('overview', token).then(setOverview).catch(error => setError(error.message)).finally(() => setBusy(false))
-  }, [token])
+    try {
+      setOverview(await api<Overview>('overview'))
+      setSignedIn(true)
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) signOut()
+      else setError((failure as Error).message)
+    } finally { setBusy(false); setReady(true) }
+  }
+  function signOut(message = '') {
+    setSignedIn(false); setOverview(undefined); setLedger(undefined); setCurrent(''); setTab('Tổng quan'); setError(message)
+  }
+  useEffect(() => {
+    sessionStorage.removeItem('rentflow-session')
+    void refresh()
+  }, [])
   async function open(id: string) {
     setLedger(undefined); setCurrent(id); setBusy(true); setError('')
     try { setLedger(await api<Ledger>('leases/' + id + '/ledger', token)) }
@@ -61,27 +74,30 @@ export default function Dashboard() {
   const unpaid = overview?.invoices.filter(row => Number(row.remainingAmount) > 0) ?? []
   const now = new Date()
   const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit' }).format(now)
-  const tabs = renter ? ['Tổng quan', 'Hợp đồng', 'Thông báo'] :
+  const tabs = renter ? ['Tổng quan', 'Hợp đồng', 'Thông báo', 'Cài đặt'] :
     ['Tổng quan', 'Khu trọ & phòng', 'Người thuê', 'Hợp đồng', 'Điện nước', 'Hóa đơn & thanh toán', 'Tiền cọc', 'Thông báo', 'Cài đặt']
   return <>
-    <header className="mast"><Link href="/" className="brand">RentFlow</Link>{token && <button className="ghost" onClick={async () => {
+    <header className="mast"><Link href="/" className="brand">RentFlow</Link>{signedIn && <button className="ghost" onClick={async () => {
       try { await api('logout', token, {}) }
-      catch (error) { setError((error as Error).message); return }
-      sessionStorage.removeItem('rentflow-session'); setToken(''); setOverview(undefined); setLedger(undefined); setCurrent(''); setTab('Tổng quan'); setError('')
+      catch (error) { if (!(error instanceof ApiError && error.status === 401)) { setError((error as Error).message); return } }
+      signOut()
     }}>Đăng xuất</button>}</header>
     <main className="shell">
       {!ready && <p role="status">Đang tải…</p>}
-      {ready && !token && <Action title="Đăng nhập RentFlow" button="Đăng nhập" fields={[field('email', 'Email', 'email'), field('password', 'Mật khẩu', 'password')]} submit={async data => {
-        const result = await api<{ token: string }>('login', '', data)
-        sessionStorage.setItem('rentflow-session', result.token)
-        setToken(result.token)
-      }} />}
+      {ready && !signedIn && <>
+        <Action title="Đăng nhập RentFlow" button="Đăng nhập" fields={[field('identifier', 'Tên đăng nhập hoặc email'), field('password', 'Mật khẩu', 'password')]} submit={async data => {
+          await api('login', '', data)
+          await refresh()
+        }} />
+        <p><Link href="/khoi-phuc">Quên mật khẩu?</Link> · <Link href="/khoi-phuc?mode=activate">Kích hoạt tài khoản</Link></p>
+      </>}
       {error && <p className="error" role="alert">{error} <button className="ghost" onClick={() => location.reload()}>Tải lại</button></p>}
       {busy && <p role="status">Đang tải…</p>}
       {overview && <>
         <nav aria-label="Quản lý">{tabs.map(item => <button key={item} aria-current={tab === item ? 'page' : undefined} onClick={() => { setTab(item); setLedger(undefined); setCurrent(''); setError('') }}>{item}</button>)}</nav>
         <h1>{tab}</h1>
         <p className="muted">{overview.actor.fullName}</p>
+        {tab === 'Cài đặt' && <AccountSettings actor={overview.actor} properties={overview.properties} tenants={overview.tenants} signedOut={signOut} />}
         {tab === 'Tổng quan' && <>
           <div className="tiles">
             {!renter && <><article><h2>Phòng trống</h2><strong>{rooms.filter(room => room.status === 'AVAILABLE').length}</strong></article>

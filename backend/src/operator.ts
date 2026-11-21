@@ -1,5 +1,7 @@
-﻿import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { z } from 'zod';
+import { issueCode } from './accounts';
+import { production } from './browser-session';
 import { db, passwordHash } from './auth';
 import { parse, atomic, requireCondition } from './rules';
 
@@ -14,6 +16,50 @@ async function main() {
       email: input.email.toLowerCase(), fullName: input.fullName, role: input.role, passwordHash: passwordHash(input.password),
     }, select: { id: true } });
     console.log(JSON.stringify(entity));
+    return;
+  }
+  if (action === 'list-recovery') {
+    const users = await db.user.findMany({
+      where: { recoveryRequestedAt: { not: null }, lockedAt: null, ...(production() ? { isDemo: false } : {}) },
+      select: { id: true, email: true, recoveryRequestedAt: true }, take: 100,
+    });
+    console.log(JSON.stringify(users));
+    return;
+  }
+  if (action === 'issue-reset') {
+    const input = parse(z.object({
+      userId: z.uuid(), evidence: z.string().trim().min(12).max(255), outputFile: z.string().min(1).max(512),
+    }), JSON.parse(readFileSync(0, 'utf8')));
+    let written = false;
+    try {
+      await db.$transaction(async tx => {
+        const user = await tx.user.findUnique({ where: { id: input.userId } });
+        requireCondition(user?.passwordHash && !user.lockedAt && !(production() && user.isDemo), 'Active account required');
+        const reset = await issueCode(tx, user.id, 'RESET');
+        await tx.audit.create({ data: { actorId: user.id, entityId: user.id, action: 'OPERATOR_RESET_ISSUED', reason: input.evidence } });
+        writeFileSync(input.outputFile, JSON.stringify(reset), { flag: 'wx', mode: 0o600 });
+        written = true;
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (written) unlinkSync(input.outputFile);
+      throw error;
+    }
+    console.log('Reset material written to the supplied private file.');
+    return;
+  }
+  if (action === 'verify-email') {
+    const input = parse(z.object({
+      userId: z.uuid(), email: z.email().max(254), evidence: z.string().trim().min(12).max(255),
+    }), JSON.parse(readFileSync(0, 'utf8')));
+    await atomic(async tx => {
+      const user = await tx.user.findUnique({ where: { id: input.userId } });
+      requireCondition(user?.passwordHash && !user.lockedAt && !(production() && user.isDemo), 'Active account required');
+      await tx.user.update({ where: { id: user.id }, data: { email: input.email.toLowerCase(), emailVerifiedAt: new Date(), recoveryRequestedAt: null } });
+      await tx.session.deleteMany({ where: { userId: user.id } });
+      await tx.accountCode.deleteMany({ where: { userId: user.id } });
+      await tx.audit.create({ data: { actorId: user.id, entityId: user.id, action: 'OPERATOR_EMAIL_VERIFIED', reason: input.evidence } });
+    });
+    console.log('Verified email updated.');
     return;
   }
   if (action === 'list-deletion') {
@@ -41,9 +87,10 @@ async function main() {
       await tx.tenant.deleteMany({ where: { id: { in: standalone.map(tenant => tenant.id) } } });
       await tx.tenant.updateMany({ where: { id: { in: historical.map(tenant => tenant.id) } }, data: { userId: null, contact: null } });
       await tx.session.deleteMany({ where: { userId: input.userId } });
+      await tx.accountCode.deleteMany({ where: { userId: input.userId } });
       await tx.notification.deleteMany({ where: { userId: input.userId } });
       await tx.user.update({ where: { id: input.userId }, data: {
-        email: input.userId + '@deleted.invalid', fullName: 'Tài khoản đã xóa', passwordHash: null,
+        email: input.userId + '@deleted.invalid', fullName: 'Tài khoản đã xóa', passwordHash: null, username: null, emailVerifiedAt: null, recoveryRequestedAt: null,
       } });
       await tx.accountDeletionRequest.update({ where: { userId: input.userId }, data: { status: input.disposition, reviewedAt: new Date() } });
       await tx.audit.create({ data: {

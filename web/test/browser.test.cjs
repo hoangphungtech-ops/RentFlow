@@ -7,7 +7,7 @@ const base = 'http://127.0.0.1:3000';
 const password = process.env.DEMO_PASSWORD;
 async function login(page, email) {
   await page.goto(base + '/quan-ly');
-  await page.getByRole('textbox', { name: 'Email' }).fill(email + '@rentflow.test');
+  await page.getByRole('textbox', { name: 'Tên đăng nhập hoặc email' }).fill(email + '@rentflow.test');
   await page.getByLabel('Mật khẩu').fill(password);
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
   await page.getByRole('heading', { name: 'Tổng quan' }).waitFor();
@@ -56,6 +56,59 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
         await page.getByRole('button', { name: 'Cài đặt' }).click();
         await page.getByRole('heading', { name: 'Phân quyền theo khu trọ' }).waitFor();
         await noOverflow(page);
+      } finally { await page.close(); }
+    });
+
+    await t.test('ADMIN UI | create and activate staff via the shared API at 360px', async () => {
+      const page = await browser.newPage({ viewport: { width: 360, height: 900 } });
+      const adminPassword = process.env.DEMO_ADMIN_PASSWORD;
+      assert.ok(adminPassword, 'Configure backend/.env.admin-demo');
+      const username = 'ui-' + randomUUID().slice(0, 12);
+      try {
+        await page.goto(base + '/quan-ly');
+        await page.getByRole('textbox', { name: 'Tên đăng nhập hoặc email' }).fill('testadmin');
+        await page.getByLabel('Mật khẩu', { exact: true }).fill(adminPassword);
+        await page.getByRole('button', { name: 'Đăng nhập' }).click();
+        await page.getByRole('heading', { name: 'Tổng quan' }).waitFor();
+        assert((await page.context().cookies()).some(cookie => cookie.name === 'rentflow_session' && cookie.httpOnly));
+        await page.reload();
+        await page.getByRole('button', { name: 'Cài đặt' }).click();
+        const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Tạo tài khoản', exact: true }) });
+        await form.getByLabel('Họ tên').fill(username);
+        await form.getByLabel('Tên đăng nhập').fill(username);
+        await form.getByLabel('Email').fill(username + '@rentflow.test');
+        await form.getByLabel('Vai trò').selectOption('STAFF');
+        await form.getByLabel('Khu trọ').selectOption({ label: 'Khu trọ TestAdmin' });
+        await form.getByRole('button', { name: 'Tạo tài khoản' }).click();
+        const invitation = page.getByLabel('Mã lời mời');
+        await invitation.waitFor();
+        const code = await invitation.inputValue();
+        await noOverflow(page);
+        await page.getByRole('button', { name: 'Đăng xuất' }).click();
+        await page.getByRole('link', { name: 'Kích hoạt tài khoản' }).click();
+        const initial = randomUUID();
+        await page.getByLabel('Mã một lần').fill(code);
+        await page.getByLabel('Mật khẩu mới', { exact: true }).fill(initial);
+        await page.getByLabel('Nhập lại mật khẩu mới').fill(initial);
+        await page.locator('form').getByRole('button', { name: 'Lưu', exact: true }).click();
+        await page.getByText('Mật khẩu đã được lưu. Bạn có thể đăng nhập.').waitFor();
+        await page.getByRole('link', { name: 'Về trang đăng nhập' }).click();
+        await page.getByRole('textbox', { name: 'Tên đăng nhập hoặc email' }).fill(username);
+        await page.getByLabel('Mật khẩu', { exact: true }).fill(initial);
+        await page.getByRole('button', { name: 'Đăng nhập' }).click();
+        await page.getByRole('button', { name: 'Cài đặt' }).click();
+        await page.getByRole('heading', { name: 'Hồ sơ cá nhân' }).waitFor();
+        assert.equal(await page.getByRole('heading', { name: 'Tài khoản & phân quyền' }).count(), 0);
+        const nextPassword = randomUUID();
+        await page.getByLabel('Mật khẩu hiện tại').fill(initial);
+        await page.getByLabel('Mật khẩu mới (tối thiểu 12 ký tự)', { exact: true }).fill(nextPassword);
+        await page.getByLabel('Nhập lại mật khẩu mới').fill(nextPassword);
+        await page.getByRole('button', { name: 'Đổi mật khẩu' }).click();
+        await page.getByText('Đã đổi mật khẩu. Vui lòng đăng nhập lại.').waitFor();
+        await page.getByRole('textbox', { name: 'Tên đăng nhập hoặc email' }).fill(username);
+        await page.getByLabel('Mật khẩu', { exact: true }).fill(nextPassword);
+        await page.getByRole('button', { name: 'Đăng nhập' }).click();
+        await page.getByRole('heading', { name: 'Tổng quan' }).waitFor();
       } finally { await page.close(); }
     });
 

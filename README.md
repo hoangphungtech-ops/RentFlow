@@ -7,8 +7,10 @@ RentFlow quản lý phòng trọ, người ở, hợp đồng, bàn giao, điệ
 Cần Node.js 22 trở lên, npm và Docker Desktop với Linux engine. Tạo `.env` và `backend/.env` từ các file mẫu. Dùng mật khẩu riêng cho MySQL root, tài khoản ứng dụng và tài khoản demo. Xem cách cấu hình và vận hành trong [runbook](docs/final-demo/RUNBOOK.md).
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -Seed
+powershell -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 ```
+
+Chỉ thêm `-Seed` khi khởi tạo một database demo mới cần dữ liệu mẫu V5.
 
 - Landing Page tại [localhost:3000](http://127.0.0.1:3000/).
 - Web Admin và người thuê tại [localhost:3000/quan-ly](http://127.0.0.1:3000/quan-ly).
@@ -28,6 +30,7 @@ Mật khẩu của tài khoản mẫu do người chạy đặt trong `DEMO_PASS
 
 ## Bàn giao
 
+- [Tài khoản demo và quản lý truy cập V6](docs/final-demo/DEMO_ACCOUNTS.md)
 - [Trạng thái P01–P07](docs/final-demo/PRODUCT_STATUS.md)
 - [Thiết kế và hướng dẫn baseline](docs/final-demo/BASELINE_README.md)
 - [Kiến trúc](docs/final-demo/ARCHITECTURE.md)

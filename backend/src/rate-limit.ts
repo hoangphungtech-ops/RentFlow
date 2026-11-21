@@ -27,6 +27,10 @@ export function sensitiveRateLimit(req: Request, res: Response, next: NextFuncti
 const sessions = new Map<string, { count: number; reset: number }>();
 let nextSweep = 0;
 const limits = new Map([
+  ['/api/auth/forgot-password', { count: 8, window: 60_000 }],
+  ['/api/auth/reset-password', { count: 12, window: 60_000 }],
+  ['/api/auth/activate', { count: 12, window: 60_000 }],
+  ['/api/account/password/change', { count: 12, window: 60_000 }],
   ['/api/login', { count: 30, window: 60_000 }],
   ['/api/trials', { count: 20, window: 60_000 }],
   ['/api/account/deletion-request', { count: 6, window: 60_000 }],

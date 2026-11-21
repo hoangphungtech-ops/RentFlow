@@ -1,8 +1,8 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { actorSelect, db, matchesPassword, SessionGuard, SessionRequest, tokenHash } from './auth';
+import { db, matchesPassword, SessionGuard, SessionRequest } from './auth';
 import { allow, atomic, audit, day, decimal, found, id, label, leaseScope, meter, money, notify, parse, period, propertyScope, requireCondition } from './rules';
 import { balance, changePayment, invoiceFor } from './finance';
 
@@ -12,20 +12,6 @@ export class PublicController {
   async health() {
     await db.$queryRaw`SELECT 1`;
     return { status: 'ok' };
-  }
-
-  @Post('login')
-  @HttpCode(200)
-  async login(@Body() body: unknown) {
-    const input = parse(z.object({ email: z.email().max(254), password: z.string().min(1).max(128) }), body);
-    const user = await db.user.findUnique({ where: { email: input.email.toLowerCase() }, select: { ...actorSelect, passwordHash: true } });
-    if (!matchesPassword(input.password, user?.passwordHash ?? null) || !user) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
-    }
-    const { passwordHash: _, ...actor } = user;
-    const token = randomBytes(32).toString('hex');
-    await db.session.create({ data: { tokenHash: tokenHash(token), userId: user.id, expiresAt: new Date(Date.now() + 8 * 3600_000) } });
-    return { token, actor };
   }
 
   @Post('trials')
@@ -39,13 +25,6 @@ export class PublicController {
 @UseGuards(SessionGuard)
 @Controller()
 export class RentalController {
-  @Post('logout')
-  @HttpCode(200)
-  async logout(@Req() req: SessionRequest) {
-    await db.session.deleteMany({ where: { tokenHash: req.tokenHash } });
-    return { ok: true };
-  }
-
   @Get('account/deletion-request')
   async deletionStatus(@Req() { actor }: SessionRequest) {
     const request = await db.accountDeletionRequest.findUnique({ where: { userId: actor.id },
@@ -142,7 +121,7 @@ export class RentalController {
     return atomic(async tx => {
       found(await tx.property.findFirst({ where: { id: propertyId, ...propertyScope(actor) } }));
       const user = found(await tx.user.findFirst({
-        where: { email: data.email.toLowerCase(), role: { in: ['STAFF', 'ACCOUNTANT'] } }, select: { id: true },
+        where: { email: data.email.toLowerCase(), role: { in: ['STAFF', 'ACCOUNTANT'] }, OR: [{ managedById: actor.id }, { managedById: null }] }, select: { id: true },
       }));
       const key = { propertyId, userId: user.id };
       if (data.operation === 'GRANT') {
@@ -162,7 +141,7 @@ export class RentalController {
     if (email) allow(actor, 'OWNER');
     return atomic(async tx => {
       found(await tx.property.findFirst({ where: { id: propertyId, ...propertyScope(actor) } }));
-      const user = email ? found(await tx.user.findFirst({ where: { email: email.toLowerCase(), role: 'RENTER' } })) : null;
+      const user = email ? found(await tx.user.findFirst({ where: { email: email.toLowerCase(), role: 'RENTER', OR: [{ managedById: actor.id }, { managedById: null }] } })) : null;
       const tenant = await tx.tenant.create({ data: { ...data, propertyId, userId: user?.id } });
       await audit(tx, actor, 'TENANT_CREATED', tenant.id);
       return tenant;

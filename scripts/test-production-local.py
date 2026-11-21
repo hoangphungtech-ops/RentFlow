@@ -8,7 +8,7 @@ import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOMAIN = "rentflow.localhost"
-TAG = "local-build-check"
+TAG = os.environ.get("RENTFLOW_SMOKE_TAG", "local-build-check")
 password = uuid.uuid4().hex
 project = "rentflow-v5-smoke-" + password[:6]
 environment = dict(
@@ -60,7 +60,7 @@ def main():
                 "curl.exe", "--noproxy", "*", "--silent", "--show-error", "--fail", "--retry", "5",
                 "--retry-all-errors", "--ssl-revoke-best-effort", "--cacert", str(certificate), "--resolve", f"{DOMAIN}:18443:127.0.0.1",
             ]
-            for path in ["/", "/quyen-rieng-tu", "/xoa-tai-khoan", "/api/health"]:
+            for path in ["/", "/quan-ly", "/khoi-phuc", "/quyen-rieng-tu", "/xoa-tai-khoan", "/api/health"]:
                 response = invoke([*curl, "https://" + DOMAIN + ":18443" + path], stdout=subprocess.PIPE).stdout
                 if not response or (path == "/api/health" and b'"status":"ok"' not in response):
                     raise RuntimeError("Invalid HTTPS smoke response for " + path)
@@ -73,6 +73,15 @@ def main():
             if any((json.loads(bindings) or {}).values()):
                 raise RuntimeError("MySQL unexpectedly has a host port")
             print("MySQL 3306 has no host mapping", flush=True)
+            demo_check = """
+            const { PrismaClient } = require('@prisma/client');
+            const db = new PrismaClient();
+            db.user.count({ where: { username: 'testadmin' } })
+              .then(count => { if (count) throw Error('Demo account present in production bootstrap'); })
+              .finally(() => db.$disconnect());
+            """
+            invoke([*compose, "exec", "-T", "api", "node", "-e", demo_check])
+            print("Production bootstrap left demo account absent", flush=True)
         finally:
             invoke([*compose, "stop", "edge", "web", "api", "mysql"])
 

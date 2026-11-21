@@ -58,6 +58,10 @@ function Button({ label, disabled, press }: { label: string; disabled: boolean; 
 export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [notice, setNotice] = useState('');
   const [token, setToken] = useState('');
   const [dash, setDash] = useState<Dashboard>();
   const [ledger, setLedger] = useState<Ledger>();
@@ -87,13 +91,21 @@ export default function App() {
   async function run(work: () => Promise<void>) {
     setBusy(true); setError('');
     try { await work(); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : 'Vui lòng thử lại.'); }
+    catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401 && token &&
+          failure.message.includes('Phiên')) {
+        await SecureStore.deleteItemAsync(tokenKey);
+        setDash(undefined); setLedger(undefined); setToken('');
+      }
+      setError(failure instanceof Error ? failure.message : 'Vui lòng thử lại.');
+    }
     finally { setBusy(false); }
   }
 
   function login() {
+    setNotice('');
     void run(async () => {
-      const session = await request<{ token: string; actor: Dashboard['actor'] }>('login', '', { email: email.trim(), password });
+      const session = await request<{ token: string; actor: Dashboard['actor'] }>('login', '', { identifier: email.trim(), password });
       try {
         if (session.actor.role !== 'RENTER') throw new Error('Dùng tài khoản người thuê để đăng nhập.');
         const overview = await request<Dashboard>('overview', session.token);
@@ -120,12 +132,14 @@ export default function App() {
     <StatusBar barStyle="dark-content" />
     <Text accessibilityRole="header" style={styles.title}>RentFlow</Text>
     {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+    {notice && <Text accessibilityRole="alert">{notice}</Text>}
     {busy && <ActivityIndicator color="#08674f" accessibilityLabel="Đang tải" />}
     {!dash ? <View style={styles.card}>
       <Text style={styles.heading}>Đăng nhập người thuê</Text>
-      <TextInput accessibilityLabel="Email" value={email} onChangeText={setEmail} placeholder="Email" autoCapitalize="none" keyboardType="email-address" style={styles.input} />
+      <TextInput accessibilityLabel="Tên đăng nhập hoặc email" value={email} onChangeText={setEmail} placeholder="Tên đăng nhập hoặc email" autoCapitalize="none" style={styles.input} />
       <TextInput accessibilityLabel="Mật khẩu" value={password} onChangeText={setPassword} placeholder="Mật khẩu" secureTextEntry style={styles.input} />
       <Button label="Đăng nhập" disabled={busy || !email.trim() || !password} press={login} />
+      <Button label="Quên mật khẩu?" disabled={busy} press={() => website('/khoi-phuc')} />
     </View> : <>
       <Text style={styles.heading}>{dash.actor.fullName}</Text>
       <View style={styles.card}>
@@ -142,6 +156,7 @@ export default function App() {
         catch (error) { if (!(error instanceof ApiError && error.status === 401)) throw error; }
         await SecureStore.deleteItemAsync(tokenKey);
         setDash(undefined); setLedger(undefined); setToken('');
+        setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
       })} />
       <Text style={styles.heading}>Sổ đối chiếu thuê trọ</Text>
       {!dash.leases.length && <Text>Chưa có hợp đồng.</Text>}
@@ -184,6 +199,17 @@ export default function App() {
       <View style={styles.card}>
         <Text style={styles.heading}>Tài khoản và quyền riêng tư</Text>
         <Text>{dash.actor.email}</Text>
+        <Text style={styles.heading}>Đổi mật khẩu</Text>
+        <TextInput accessibilityLabel="Mật khẩu hiện tại" placeholder="Mật khẩu hiện tại" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry style={styles.input} />
+        <TextInput accessibilityLabel="Mật khẩu mới" placeholder="Mật khẩu mới (12 ký tự trở lên)" value={newPassword} onChangeText={setNewPassword} secureTextEntry style={styles.input} />
+        <TextInput accessibilityLabel="Nhập lại mật khẩu mới" placeholder="Nhập lại mật khẩu mới" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry style={styles.input} />
+        <Button label="Đổi mật khẩu" disabled={busy || !currentPassword || !newPassword || !confirmPassword} press={() => void run(async () => {
+          await request('account/password/change', token, { currentPassword, newPassword, confirmPassword });
+          await SecureStore.deleteItemAsync(tokenKey);
+          setDash(undefined); setLedger(undefined); setToken('');
+          setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+          setNotice('Đã đổi mật khẩu. Vui lòng đăng nhập lại.');
+        })} />
         <Button label="Quyền riêng tư" disabled={busy} press={() => website('/quyen-rieng-tu')} />
         <Button label="Yêu cầu xóa tài khoản" disabled={busy} press={() => website('/xoa-tai-khoan')} />
         <Button label="Liên hệ hỗ trợ" disabled={busy} press={() => void run(async () => { await Linking.openURL('mailto:hoangphung.tech@gmail.com'); })} />

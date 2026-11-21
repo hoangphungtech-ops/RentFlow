@@ -7,7 +7,9 @@
     "test": "node --env-file=.env --test test/integration.test.cjs",
     "build": "tsc",
     "start": "node --env-file=.env dist/src/main.js",
-    "seed": "node --env-file=.env dist/prisma/seed.js"
+    "seed": "node --env-file=.env dist/prisma/seed.js",
+    "provision:demo-admin": "node --env-file=.env --env-file=.env.admin-demo dist/src/provision-demo-admin.js",
+    "test:accounts": "node --env-file=.env --env-file=.env.admin-demo --test test/accounts.test.cjs"
   },
   "keywords": [],
   "author": "",

@@ -1,17 +1,20 @@
-﻿'use client'
+'use client'
 
 import { FormEvent, ReactNode, useState } from 'react'
 
 export const vnd = (value: string | number) => Number(value).toLocaleString('vi-VN') + ' đ'
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message) }
+}
 export async function api<T>(path: string, token = '', body?: object, method?: string): Promise<T> {
   const response = await fetch('/api/' + path, {
     method: method ?? (body ? 'POST' : 'GET'),
-    headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { 'X-RentFlow-Web': '1', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(12000),
   }).catch(() => { throw new Error('Mất kết nối. Vui lòng thử lại.') })
   const result = await response.json().catch(() => null)
-  if (!response.ok) throw new Error([result?.message ?? 'Máy chủ chưa sẵn sàng.'].flat().join(' · '))
+  if (!response.ok) throw new ApiError([result?.message ?? 'Máy chủ chưa sẵn sàng.'].flat().join(' · '), response.status)
   return result as T
 }
 
