@@ -1,5 +1,7 @@
-﻿import 'reflect-metadata';
+import 'reflect-metadata';
 import { ArgumentsHost, Catch, ExceptionFilter, Module } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { sensitiveRateLimit } from './rate-limit';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Prisma } from '@prisma/client';
@@ -22,11 +24,19 @@ class AppModule {}
 
 async function bootstrap() {
   await db.$connect();
-  const app = await NestFactory.create(AppModule, { logger: ['log', 'warn', 'error'] });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ['log', 'warn', 'error'] });
+  const publicOrigin = process.env.PUBLIC_ORIGIN;
+  if (publicOrigin) {
+    if (new URL(publicOrigin).protocol !== 'https:') throw new Error('PUBLIC_ORIGIN must be HTTPS');
+    app.enableCors({ origin: publicOrigin, methods: ['GET', 'POST', 'OPTIONS'] });
+  }
+  const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+  if (Number.isInteger(proxyHops) && proxyHops > 0) app.set('trust proxy', proxyHops);
+  app.use(sensitiveRateLimit);
   app.setGlobalPrefix('api');
   app.useGlobalFilters(new DatabaseError());
   const config = new DocumentBuilder().setTitle('RentFlow API').setVersion('1.0').addBearerAuth().build();
-  SwaggerModule.setup('swagger', app, () => SwaggerModule.createDocument(app, config));
+  if (!publicOrigin) SwaggerModule.setup('swagger', app, () => SwaggerModule.createDocument(app, config));
   await app.listen(Number(process.env.PORT ?? 3001), process.env.API_HOST ?? '127.0.0.1');
 }
 

@@ -27,6 +27,7 @@ model User {
 
   passwordHash String? @db.VarChar(150)
   sessions Session[]
+  deletionRequest AccountDeletionRequest?
   access PropertyAccess[]
   tenantProfiles Tenant[]
 
@@ -329,4 +330,11 @@ model Audit {
   reason String? @db.VarChar(255)
   createdAt DateTime @default(now())
   @@index([entityId])
+}
+model AccountDeletionRequest {
+  userId String @id @db.Char(36)
+  user User @relation(fields: [userId], references: [id])
+  status String @default("PENDING") @db.VarChar(30)
+  requestedAt DateTime @default(now())
+  reviewedAt DateTime?
 }

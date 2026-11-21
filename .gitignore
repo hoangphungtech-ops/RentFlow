@@ -8,3 +8,10 @@ dist/
 next-env.d.ts
 *.tsbuildinfo
 .rentflow-*.pid
+!deploy/.env.production.example
+*.jks
+*.keystore
+*.aab
+*.apk
+*.sql.gz
+*.sql.gz.age

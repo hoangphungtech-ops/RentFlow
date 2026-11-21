@@ -1,0 +1,4 @@
+backend/Dockerfile text eol=lf
+web/Dockerfile text eol=lf
+deploy/Caddyfile text eol=lf
+deploy/*.sh text eol=lf

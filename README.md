@@ -34,3 +34,10 @@ Mật khẩu của tài khoản mẫu do người chạy đặt trong `DEMO_PASS
 - [Báo cáo bảo mật](docs/final-demo/SECURITY_REPORT.md)
 - [Kịch bản trình bày và phản biện](docs/final-demo/DEMO_AND_DEFENSE.md)
 - [Giới hạn và checklist bản phát hành](docs/final-demo/RELEASE_CHECKLIST.md)
+
+## Production v? Google Play
+
+- [Tr?ng th?i ph?t h?nh](docs/production/RELEASE_STATUS.md)
+- [Tri?n khai VPS](docs/production/DEPLOYMENT_GUIDE.md)
+- [Android Release](docs/production/ANDROID_RELEASE.md)
+- [Google Play checklist](docs/production/GOOGLE_PLAY_CHECKLIST.md)

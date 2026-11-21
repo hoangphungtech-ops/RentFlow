@@ -16,9 +16,9 @@ Assert-Success 'Docker Desktop engine check'
 docker compose -p rentflow-demo up -d --wait mysql
 Assert-Success 'MySQL startup'
 if (!$SkipInstall) {
-    npm.cmd --prefix backend ci
+    npm.cmd --prefix backend ci --prefer-offline --no-fund --no-audit
     Assert-Success 'Backend dependency installation'
-    npm.cmd --prefix web ci
+    npm.cmd --prefix web ci --prefer-offline --no-fund --no-audit
     Assert-Success 'Web dependency installation'
 }
 Push-Location backend

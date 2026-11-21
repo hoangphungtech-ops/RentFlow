@@ -46,6 +46,28 @@ export class RentalController {
     return { ok: true };
   }
 
+  @Get('account/deletion-request')
+  async deletionStatus(@Req() { actor }: SessionRequest) {
+    const request = await db.accountDeletionRequest.findUnique({ where: { userId: actor.id },
+      select: { status: true, requestedAt: true, reviewedAt: true } });
+    return { request };
+  }
+
+  @Post('account/deletion-request')
+  async deletionRequest(@Req() { actor }: SessionRequest, @Body() body: unknown) {
+    const { password } = parse(z.object({ password: z.string().min(1).max(128) }), body);
+    const user = await db.user.findUniqueOrThrow({ where: { id: actor.id }, select: { passwordHash: true } });
+    if (!matchesPassword(password, user.passwordHash)) throw new UnauthorizedException('M?t kh?u x?c minh kh?ng ??ng');
+    return atomic(async tx => {
+      const previous = await tx.accountDeletionRequest.findUnique({ where: { userId: actor.id } });
+      if (previous) return { status: previous.status, requestedAt: previous.requestedAt, reviewedAt: previous.reviewedAt };
+      const row = await tx.accountDeletionRequest.create({ data: { userId: actor.id },
+        select: { status: true, requestedAt: true, reviewedAt: true } });
+      await audit(tx, actor, 'ACCOUNT_DELETION_REQUESTED', actor.id);
+      return row;
+    });
+  }
+
   @Get('overview')
   async overview(@Req() { actor }: SessionRequest) {
     const scope = leaseScope(actor);

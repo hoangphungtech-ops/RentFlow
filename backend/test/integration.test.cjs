@@ -1,5 +1,6 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const { PrismaClient } = require('@prisma/client');
 
@@ -159,6 +160,28 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     assert.equal(final.invoices[0].payments.filter(row => row.method === 'DEPOSIT').length, 1);
     const updated = await api('overview', { token: owner });
     assert.equal(updated.properties.find(row => row.id === property.id).rooms.find(row => row.id === room.id).status, 'AVAILABLE');
+  });
+  await t.test('PR01 | verified deletion request, scoped status and operator processing', async () => {
+    const email = 'deletion-' + unique + '@rentflow.test';
+    const operator = (action, input) => execFileSync(process.execPath, ['dist/src/operator.js', action], {
+      input: JSON.stringify(input), encoding: 'utf8',
+    });
+    const account = JSON.parse(operator('create', { email, fullName: 'Ng??i thu? ki?m th? x?a', role: 'RENTER', password: password + 'Test16!' }));
+    const loginData = { email, password: password + 'Test16!' };
+    const { token } = await api('login', { data: loginData, expected: 200 });
+    mintedSessions.push(token);
+    await post(token, 'account/deletion-request', { password: 'incorrect' }, 401);
+    const first = await post(token, 'account/deletion-request', { password: loginData.password });
+    const repeated = await post(token, 'account/deletion-request', { password: loginData.password });
+    assert.deepEqual(first, repeated);
+    assert.equal(first.status, 'PENDING');
+    assert.equal((await api('account/deletion-request', { token: owner })).request, null);
+    operator('close-renter', { userId: account.id, reviewerId: overview.actor.id,
+      disposition: 'ERASED', evidence: 'B?ng ch?ng th? nghi?m ' + unique });
+    await api('overview', { token, expected: 401 });
+    await api('login', { data: loginData, expected: 401 });
+    assert.equal((await db.accountDeletionRequest.findUnique({ where: { userId: account.id } })).status, 'ERASED');
+    assert.equal(await db.user.findUnique({ where: { email } }), null);
   });
   await t.test('RF15 / RF17 Next proxy persists trial in MySQL', async () => {
     const page = await fetch(base);

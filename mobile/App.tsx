@@ -1,19 +1,26 @@
-﻿import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const origin = process.env.EXPO_PUBLIC_API_ORIGIN?.replace(/\/$/, '');
+const tokenKey = 'rentflow.session.v1';
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
 const money = (value: string) => Number(value).toLocaleString('vi-VN') + ' đ';
 type Lease = { id: string; room: { roomCode: string }; startDate: string; endDate: string; status: string };
 type Dashboard = {
-  actor: { fullName: string; role: string };
+  actor: { fullName: string; role: string; email: string };
+  invoices: { id: string; leaseId: string; billingPeriod: string; totalAmount: string; paidAmount: string; remainingAmount: string; dueDate: string }[];
   leases: Lease[];
   notifications: { id: string; message: string }[];
 };
 type Ledger = Lease & {
+  rentAmount: string; tenants: { representative: boolean; tenant: { fullName: string } }[];
   depositAgreed: string; depositReceived: string;
   settlement: null | { deduction: string; debtOffset: string; refund: string; reason: string };
   invoices: {
-    id: string; billingPeriod: string; totalAmount: string; paidAmount: string; remainingAmount: string;
+    id: string; billingPeriod: string; dueDate: string; status: string; totalAmount: string; paidAmount: string; remainingAmount: string;
     items: { id: string; description: string; meterStart: string | null; meterEnd: string | null; quantity: string; snapshotUnitPrice: string; lineTotal: string }[];
     payments: { id: string; amount: string; method: string; status: string }[];
   }[];
@@ -57,6 +64,24 @@ export default function App() {
   const [settlement, setSettlement] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void run(async () => {
+      const saved = await SecureStore.getItemAsync(tokenKey);
+      if (!saved) return;
+      try {
+        const overview = await request<Dashboard>('overview', saved);
+        if (overview.actor.role !== 'RENTER') {
+          await SecureStore.deleteItemAsync(tokenKey);
+          return;
+        }
+        setDash(overview);
+        setToken(saved);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) await SecureStore.deleteItemAsync(tokenKey);
+        throw error;
+      }
+    });
+  }, []);
 
   async function run(work: () => Promise<void>) {
     setBusy(true); setError('');
@@ -70,7 +95,9 @@ export default function App() {
       const session = await request<{ token: string; actor: Dashboard['actor'] }>('login', '', { email: email.trim(), password });
       try {
         if (session.actor.role !== 'RENTER') throw new Error('Dùng tài khoản người thuê để đăng nhập.');
-        setDash(await request<Dashboard>('overview', session.token));
+        const overview = await request<Dashboard>('overview', session.token);
+        await SecureStore.setItemAsync(tokenKey, session.token);
+        setDash(overview);
         setToken(session.token); setPassword('');
       } catch (error) {
         await request('logout', session.token, {}).catch(() => undefined);
@@ -78,6 +105,15 @@ export default function App() {
       }
     });
   }
+
+  const activeLease = dash?.leases.find(lease => lease.status === 'ACTIVE' || lease.status === 'EXPIRED');
+  const latest = activeLease && dash?.invoices.filter(invoice => invoice.leaseId === activeLease.id)
+    .sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod))[0];
+  const date = (value: string) => new Date(value).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const website = (path: string) => void run(async () => {
+    if (!origin) throw new Error('Ch?a c? ??a ch? website.');
+    await Linking.openURL(origin + path);
+  });
 
   return <ScrollView keyboardShouldPersistTaps="handled" style={styles.page} contentContainerStyle={styles.content}>
     <StatusBar barStyle="dark-content" />
@@ -91,8 +127,19 @@ export default function App() {
       <Button label="Đăng nhập" disabled={busy || !email.trim() || !password} press={login} />
     </View> : <>
       <Text style={styles.heading}>{dash.actor.fullName}</Text>
+      <View style={styles.card}>
+        <Text style={styles.heading}>T?ng quan</Text>
+        <Text>{activeLease ? 'Ph?ng ' + activeLease.room.roomCode : 'Ch?a c? ph?ng ?ang thu?.'}</Text>
+        {latest ? <Text>K? {latest.billingPeriod} ? T?ng {money(latest.totalAmount)} ? ?? thu {money(latest.paidAmount)} ? C?n n? {money(latest.remainingAmount)}</Text> : <Text>Ch?a c? h?a ??n cho ph?ng ?ang thu?.</Text>}
+        <Button label="T?i d? li?u m?i" disabled={busy} press={() => void run(async () => {
+          setDash(await request<Dashboard>('overview', token));
+          if (ledger) setLedger(await request<Ledger>('leases/' + ledger.id + '/ledger', token));
+        })} />
+      </View>
       <Button label="Đăng xuất" disabled={busy} press={() => void run(async () => {
-        await request('logout', token, {});
+        try { await request('logout', token, {}); }
+        catch (error) { if (!(error instanceof ApiError && error.status === 401)) throw error; }
+        await SecureStore.deleteItemAsync(tokenKey);
         setDash(undefined); setLedger(undefined); setToken('');
       })} />
       <Text style={styles.heading}>Sổ đối chiếu thuê trọ</Text>
@@ -104,6 +151,8 @@ export default function App() {
       {ledger && <View style={styles.card}>
         <Text style={styles.heading}>Phòng {ledger.room.roomCode}</Text>
         <Text>{new Date(ledger.startDate).toLocaleDateString('vi-VN')} – {new Date(ledger.endDate).toLocaleDateString('vi-VN')}</Text>
+        <Text>Ti?n thu? {money(ledger.rentAmount)} ? {status[ledger.status] ?? ledger.status}</Text>
+        {ledger.tenants.filter(member => member.representative).map(member => <Text key={member.tenant.fullName}>??i di?n {member.tenant.fullName}</Text>)}
         <Button label={settlement ? 'Thu gọn quyết toán' : 'Xem quyết toán'} disabled={busy} press={() => setSettlement(!settlement)} />
         {settlement && <>
           <Text>Cọc thỏa thuận {money(ledger.depositAgreed)} · Thực nhận {money(ledger.depositReceived)}</Text>
@@ -129,6 +178,13 @@ export default function App() {
       <View style={styles.card}>
         <Text style={styles.heading}>Thông báo</Text>
         {dash.notifications.length ? dash.notifications.map(entry => <Text key={entry.id}>{entry.message}</Text>) : <Text>Chưa có thông báo.</Text>}
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.heading}>T?i kho?n v? quy?n ri?ng t?</Text>
+        <Text>{dash.actor.email}</Text>
+        <Button label="Quy?n ri?ng t?" disabled={busy} press={() => website('/quyen-rieng-tu')} />
+        <Button label="Y?u c?u x?a t?i kho?n" disabled={busy} press={() => website('/xoa-tai-khoan')} />
+        <Button label="Li?n h? h? tr?" disabled={busy} press={() => void run(async () => { await Linking.openURL('mailto:hoangphung.tech@gmail.com'); })} />
       </View>
     </>}
   </ScrollView>;

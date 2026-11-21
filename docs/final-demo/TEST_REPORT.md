@@ -1,4 +1,4 @@
-﻿# Báo cáo kiểm thử RentFlow
+# Báo cáo kiểm thử RentFlow
 
 **Môi trường** Windows, Node.js 24.18.0, Docker 28.5.1, MySQL 8.0.46, Prisma 6.19.3, Next.js 16.4.6, Microsoft Edge headless.
 
@@ -12,7 +12,7 @@ Khởi động demo có seed như runbook. Các test ghi dữ liệu giả lập
 | W | `npm.cmd --prefix web test` |
 | D | `powershell -ExecutionPolicy Bypass -File .\scripts\test-db-persistence.ps1` |
 | H | `powershell -ExecutionPolicy Bypass -File .\scripts\health-check.ps1` |
-| G | `git diff --cached --check`, kiểm tra Git index, mẫu bí mật và file ignore |
+| G | `git -c core.whitespace=-blank-at-eof diff --cached --check`, kiểm tra Git index, mẫu bí mật và file ignore |
 | M | `npm.cmd --prefix mobile run typecheck` và `npm.cmd --prefix mobile run build` |
 
 | ID | Input | Expected | Actual | Trạng thái | Bằng chứng |
