@@ -8,4 +8,4 @@
 
 **Danh mục đề xuất** Productivity. **Quảng cáo** không có trong mã nguồn. **Đối tượng** người thuê và người quản lý trưởng thành, chủ tài khoản điền kết quả theo câu hỏi Play Console. **Liên hệ dự án** hoangphung.tech@gmail.com; cần chủ tài khoản xác nhận dùng cho hỗ trợ công khai.
 
-**Release notes** Phiên bản đầu cho người thuê, thêm tổng quan, hóa đơn, sổ đối chiếu, tiền cọc và quyền riêng tư. Icon nguồn tại `mobile/assets/`. Feature graphic và ảnh màn hình thiết bị chưa có. URL privacy và xóa tài khoản cần domain thật. Content rating và thông tin quyền truy cập sẽ điền khi có draft trên Play.
+**Release notes** Phiên bản đầu cho người thuê, thêm tổng quan, hóa đơn, sổ đối chiếu, tiền cọc và quyền riêng tư. Icon và feature graphic 1024 × 500 nằm tại `mobile/assets/`. Ảnh màn hình Android cần chụp trên thiết bị thật. URL privacy và xóa tài khoản cần domain thật. Content rating và thông tin quyền truy cập sẽ điền khi có draft trên Play.

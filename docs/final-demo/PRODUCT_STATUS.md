@@ -2,7 +2,7 @@
 
 **Kết luận nghiệm thu** RENTFLOW — PARTIAL / NOT READY
 
-**Commit V4 ?? x?c minh tr?n GitHub** `62a72437c62ba3fe8122ff137dab18c8d0f35888`. V5 c? tr?ng th?i ri?ng trong [Release Status](../production/RELEASE_STATUS.md).
+**Commit V4 đã xác minh trên GitHub** `62a72437c62ba3fe8122ff137dab18c8d0f35888`. V5 có trạng thái riêng trong [Release Status](../production/RELEASE_STATUS.md).
 
 **Baseline** `53a64f2` từ `origin/feat/vu-foundation`. Git sau fetch không tìm thấy `fcdd89e3ed0396d2443ec163f047258d9d2d2743`. OLD CODE NOT AVAILABLE. Migration gốc được giữ và theo sau bằng migration bổ sung trên nhánh `feat/phung-rentflow-final-demo`.
 

@@ -8,6 +8,6 @@ Chạy cài đặt APK và test đăng nhập, liên thông, lỗi mạng, phiê
 
 [Expo SDK 58](https://docs.expo.dev/versions/v58.0.0/)
 
-## B?ng ch?ng build local
+## Bằng chứng build local
 
-Expo export Android t?o bundle Hermes `index-dcf01f4f7a7957e78d204daf5b5a4ecd.hbc`. SHA-256 `10bc2bca0775d6bec61c0098c5880cacebfc9bfc60fb4ba72c2f6197a0426be8`. K?t qu? typecheck v? ki?m tra c?u h?nh n?m trong b?o c?o V5. Bundle ch?a g?n m?i tr??ng release.
+Expo export Android tạo Hermes bundle `index-d0e7105aa275bd2178d6d122dea26fe5.hbc`. SHA-256 `a68369af1b793ce304e1fd827580d1b737d891c71fdf8e23e68f0d4cb05b289f`. Typecheck và config introspect đạt. Bundle chưa gắn môi trường release.

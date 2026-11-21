@@ -24,6 +24,7 @@ export function AdminForms({ overview, tab, current, write }: { overview: Overvi
   if (tab === 'Khu trọ & phòng' && owner) return <div className="forms">
     <Action title="Tạo khu trọ" fields={[field('name','Tên khu'), field('address','Địa chỉ')]} submit={values => write('properties', values)} />
     <Action title="Tạo phòng" fields={[property, field('roomCode','Mã phòng'), n('baseRentPrice','Giá thuê'), n('maxOccupants','Sức chứa'), select('status','Trạng thái',[['AVAILABLE','Trống'],['MAINTENANCE','Bảo trì']])]} submit={scoped('properties', propertyField, '/rooms')} />
+    <Action title="Cập nhật phòng" fields={[rooms, n('baseRentPrice','Giá thuê mới'), n('maxOccupants','Sức chứa'), select('status','Trạng thái',[['AVAILABLE','Trống'],['MAINTENANCE','Bảo trì'],['OCCUPIED','Đang thuê']])]} submit={scoped('rooms','roomId','/settings')} />
   </div>
   if (tab === 'Người thuê' && operations) return <Action title="Thêm người thuê" fields={[
     property, field('fullName','Họ tên'), field('contact','Liên hệ','text',true), ...(owner ? [field('email','Email tài khoản đã cấp','email',true)] : []),
@@ -45,6 +46,9 @@ export function AdminForms({ overview, tab, current, write }: { overview: Overvi
       select('invoiceId','Hóa đơn bù nợ',invoices.filter(row => row.leaseId === chosen.id && Number(row.remainingAmount) > 0).map(row => [row.id, row.billingPeriod]),true),
     ]} submit={values => write('leases/' + chosen.id + '/settlement', values)} />}
   </div>
+  if (tab === 'Cài đặt' && owner) return <Action title="Phân quyền theo khu trọ" fields={[
+    property, field('email','Email nhân viên hoặc kế toán','email'), select('operation','Thao tác',[['GRANT','Cấp quyền'],['REVOKE','Thu hồi']]),
+  ]} submit={scoped('properties',propertyField,'/access')} />
   if (tab === 'Cài đặt') return <p>Vai trò tài khoản hiện tại · {{ OWNER: 'Chủ trọ', STAFF: 'Nhân viên', ACCOUNTANT: 'Kế toán' }[actor.role]}</p>
   return null
 }

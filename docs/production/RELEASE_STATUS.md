@@ -1,4 +1,4 @@
-﻿# Trạng thái phát hành RentFlow
+# Trạng thái phát hành RentFlow
 
 | Mốc | Trạng thái | Bằng chứng hoặc điều kiện còn thiếu |
 |---|---|---|

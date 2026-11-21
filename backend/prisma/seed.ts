@@ -296,11 +296,11 @@ async function main() {
   }
   const representative = await prisma.tenant.upsert({
     where: { propertyId_userId: { propertyId: IDS.PROP_A, userId: IDS.RENTER_A } },
-    update: {}, create: { propertyId: IDS.PROP_A, userId: IDS.RENTER_A, fullName: "Ng??i thu? m?u A" },
+    update: {}, create: { propertyId: IDS.PROP_A, userId: IDS.RENTER_A, fullName: "Người thuê mẫu A" },
   });
   const companion = await prisma.tenant.upsert({
     where: { id: "88888888-8888-4888-8888-888888888801" }, update: {},
-    create: { id: "88888888-8888-4888-8888-888888888801", propertyId: IDS.PROP_A, fullName: "Ng??i ? c?ng m?u" },
+    create: { id: "88888888-8888-4888-8888-888888888801", propertyId: IDS.PROP_A, fullName: "Người ở cùng mẫu" },
   });
   await prisma.leaseTenant.createMany({ data: [
     { leaseId: IDS.LEASE_A, tenantId: representative.id, representative: true },
@@ -308,7 +308,7 @@ async function main() {
   ], skipDuplicates: true });
   await prisma.handover.upsert({ where: { leaseId_kind: { leaseId: IDS.LEASE_A, kind: "IN" } },
     update: {}, create: { leaseId: IDS.LEASE_A, kind: "IN", date: effectiveDate, confirmedAt: effectiveDate,
-      condition: "Ph?ng s?ch, thi?t b? ho?t ??ng", inventory: "M?t gi??ng, m?t qu?t", electric: 100, water: 20 } });
+      condition: "Phòng sạch, thiết bị hoạt động", inventory: "Một giường, một quạt", electric: 100, water: 20 } });
   await prisma.$transaction(async tx => {
     const invoiceId = IDS.INVOICE_A_2026_11;
     const requestKey = "99999999-9999-4999-8999-999999999901";
@@ -339,13 +339,13 @@ async function main() {
       depositReceived: received.toFixed(2), startDate: effectiveDate, endDate: checkout, status: "TERMINATED",
       tenants: { create: { tenantId: representative.id, representative: true } },
       handovers: { create: [
-        { kind: "IN", date: effectiveDate, confirmedAt: effectiveDate, condition: "Ph?ng nguy?n tr?ng", inventory: "M?t qu?t", electric: 0, water: 0 },
-        { kind: "OUT", date: checkout, confirmedAt: checkout, condition: "C?ng t?c qu?t c?n s?a", inventory: "M?t qu?t", electric: 0, water: 0 },
+        { kind: "IN", date: effectiveDate, confirmedAt: effectiveDate, condition: "Phòng nguyên trạng", inventory: "Một quạt", electric: 0, water: 0 },
+        { kind: "OUT", date: checkout, confirmedAt: checkout, condition: "Công tắc quạt cần sửa", inventory: "Một quạt", electric: 0, water: 0 },
       ] },
       invoices: { create: {
         id: invoiceId, billingPeriod: "2026-11", totalAmount: 500000, paidAmount: 500000, remainingAmount: 0,
         dueDate: checkout, issuedAt: checkout, status: "PAID",
-        items: { create: { itemType: "RENT", description: "Ti?n thu? c?n l?i", quantity: 1, snapshotUnitPrice: 500000, lineTotal: 500000 } },
+        items: { create: { itemType: "RENT", description: "Tiền thuê còn lại", quantity: 1, snapshotUnitPrice: 500000, lineTotal: 500000 } },
         payments: { create: {
           requestKey: "99999999-9999-4999-8999-999999999903", amount: debtOffset.toFixed(2), method: "DEPOSIT",
           status: "CONFIRMED", confirmedAt: checkout,
@@ -354,10 +354,10 @@ async function main() {
       settlement: { create: {
         received: received.toFixed(2), deduction: deduction.toFixed(2), debtOffset: debtOffset.toFixed(2),
         refund: received.minus(deduction).minus(debtOffset).toFixed(2), invoiceId, confirmedBy: IDS.OWNER_A,
-        reason: "S?a c?ng t?c qu?t theo bi?n b?n tr? ph?ng v? b? ti?n thu? c?n l?i", createdAt: checkout,
+        reason: "Sửa công tắc quạt theo biên bản trả phòng và bù tiền thuê còn lại", createdAt: checkout,
       } },
     } });
-    await tx.notification.create({ data: { userId: IDS.RENTER_A, event: "settlement:" + leaseId, message: "?? ch?t quy?t to?n c?c ph?ng R110" } });
+    await tx.notification.create({ data: { userId: IDS.RENTER_A, event: "settlement:" + leaseId, message: "Đã chốt quyết toán cọc phòng R110" } });
   });
 
   console.log(

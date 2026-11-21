@@ -166,7 +166,7 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     const operator = (action, input) => execFileSync(process.execPath, ['dist/src/operator.js', action], {
       input: JSON.stringify(input), encoding: 'utf8',
     });
-    const account = JSON.parse(operator('create', { email, fullName: 'Ng??i thu? ki?m th? x?a', role: 'RENTER', password: password + 'Test16!' }));
+    const account = JSON.parse(operator('create', { email, fullName: 'Người thuê kiểm thử xóa', role: 'RENTER', password: password + 'Test16!' }));
     const loginData = { email, password: password + 'Test16!' };
     const { token } = await api('login', { data: loginData, expected: 200 });
     mintedSessions.push(token);
@@ -177,7 +177,7 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     assert.equal(first.status, 'PENDING');
     assert.equal((await api('account/deletion-request', { token: owner })).request, null);
     operator('close-renter', { userId: account.id, reviewerId: overview.actor.id,
-      disposition: 'ERASED', evidence: 'B?ng ch?ng th? nghi?m ' + unique });
+      disposition: 'ERASED', evidence: 'Bằng chứng thử nghiệm ' + unique });
     await api('overview', { token, expected: 401 });
     await api('login', { data: loginData, expected: 401 });
     assert.equal((await db.accountDeletionRequest.findUnique({ where: { userId: account.id } })).status, 'ERASED');

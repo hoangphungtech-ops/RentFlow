@@ -29,15 +29,16 @@ Mật khẩu của tài khoản mẫu do người chạy đặt trong `DEMO_PASS
 ## Bàn giao
 
 - [Trạng thái P01–P07](docs/final-demo/PRODUCT_STATUS.md)
+- [Thiết kế và hướng dẫn baseline](docs/final-demo/BASELINE_README.md)
 - [Kiến trúc](docs/final-demo/ARCHITECTURE.md)
 - [Báo cáo kiểm thử](docs/final-demo/TEST_REPORT.md)
 - [Báo cáo bảo mật](docs/final-demo/SECURITY_REPORT.md)
 - [Kịch bản trình bày và phản biện](docs/final-demo/DEMO_AND_DEFENSE.md)
 - [Giới hạn và checklist bản phát hành](docs/final-demo/RELEASE_CHECKLIST.md)
 
-## Production v? Google Play
+## Production và Google Play
 
-- [Tr?ng th?i ph?t h?nh](docs/production/RELEASE_STATUS.md)
-- [Tri?n khai VPS](docs/production/DEPLOYMENT_GUIDE.md)
+- [Trạng thái phát hành](docs/production/RELEASE_STATUS.md)
+- [Triển khai VPS](docs/production/DEPLOYMENT_GUIDE.md)
 - [Android Release](docs/production/ANDROID_RELEASE.md)
 - [Google Play checklist](docs/production/GOOGLE_PLAY_CHECKLIST.md)

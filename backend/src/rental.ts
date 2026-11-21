@@ -57,7 +57,7 @@ export class RentalController {
   async deletionRequest(@Req() { actor }: SessionRequest, @Body() body: unknown) {
     const { password } = parse(z.object({ password: z.string().min(1).max(128) }), body);
     const user = await db.user.findUniqueOrThrow({ where: { id: actor.id }, select: { passwordHash: true } });
-    if (!matchesPassword(password, user.passwordHash)) throw new UnauthorizedException('M?t kh?u x?c minh kh?ng ??ng');
+    if (!matchesPassword(password, user.passwordHash)) throw new UnauthorizedException('Mật khẩu xác minh không đúng');
     return atomic(async tx => {
       const previous = await tx.accountDeletionRequest.findUnique({ where: { userId: actor.id } });
       if (previous) return { status: previous.status, requestedAt: previous.requestedAt, reviewedAt: previous.reviewedAt };
@@ -90,7 +90,7 @@ export class RentalController {
       lease: { tenants: { some: { tenant: { userId } } } },
     }, select: { id: true, billingPeriod: true } });
     if (invoices.length) await db.notification.createMany({
-      data: invoices.map(invoice => ({ userId, event: 'due:' + invoice.id, message: 'H?a ??n s?p ??n h?n k? ' + invoice.billingPeriod })),
+      data: invoices.map(invoice => ({ userId, event: 'due:' + invoice.id, message: 'Hóa đơn sắp đến hạn kỳ ' + invoice.billingPeriod })),
       skipDuplicates: true,
     });
   }
@@ -127,8 +127,8 @@ export class RentalController {
       const active = await tx.lease.findFirst({
         where: { roomId, status: { in: ['ACTIVE', 'EXPIRED'] } }, include: { _count: { select: { tenants: true } } },
       });
-      requireCondition(Boolean(active) === (data.status === 'OCCUPIED'), 'Tr?ng th?i ph?ng ph?i ph? h?p h?p ??ng ?ang gi? ph?ng');
-      requireCondition(!active || data.maxOccupants >= active._count.tenants, 'S?c ch?a nh? h?n s? ng??i ?ang ?');
+      requireCondition(Boolean(active) === (data.status === 'OCCUPIED'), 'Trạng thái phòng phải phù hợp hợp đồng đang giữ phòng');
+      requireCondition(!active || data.maxOccupants >= active._count.tenants, 'Sức chứa nhỏ hơn số người đang ở');
       const updated = await tx.room.update({ where: { id: room.id }, data });
       await audit(tx, actor, 'ROOM_UPDATED', room.id);
       return updated;

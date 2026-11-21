@@ -47,11 +47,14 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
       try {
         await login(page, 'owner.a');
         await page.getByRole('button', { name: 'Khu trọ & phòng' }).click();
+        await page.getByRole('heading', { name: 'Cập nhật phòng' }).waitFor();
         await page.getByLabel('Tìm phòng').fill('r103');
         await page.getByText('R103', { exact: true }).waitFor();
         assert.equal(await page.getByText('R101', { exact: true }).count(), 0);
         await page.getByRole('button', { name: 'Hóa đơn & thanh toán' }).click();
         await page.getByRole('heading', { name: 'Phát hành hóa đơn' }).waitFor();
+        await page.getByRole('button', { name: 'Cài đặt' }).click();
+        await page.getByRole('heading', { name: 'Phân quyền theo khu trọ' }).waitFor();
         await noOverflow(page);
       } finally { await page.close(); }
     });
@@ -60,6 +63,7 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
       const page = await browser.newPage({ viewport: { width: 360, height: 800 } });
       try {
         await page.goto(base);
+        await page.getByRole('link', { name: 'Quyền riêng tư' }).waitFor();
         const name = 'Khách thử ' + randomUUID().slice(0, 8);
         const button = page.getByRole('button', { name: 'Gửi đăng ký' });
         await page.getByLabel('Họ tên').fill(name);

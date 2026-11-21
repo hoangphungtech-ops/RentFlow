@@ -21,11 +21,11 @@ export default function Home() {
         <article><h2>Trả phòng & tiền cọc</h2><p>Đối chiếu tiền thực nhận, chi phí khấu trừ, bù nợ và số tiền hoàn.</p></article>
       </section>
       <section className="product-preview">
-        <h2>H?a ??n m?u ph?ng R101</h2>
-        <Image src={ledger} alt="S? ??i chi?u RentFlow hi?n th? c?ng n?, c?ch t?nh ?i?n n??c v? l?ch s? x?c nh?n thanh to?n c?a h?a ??n m?u R101" sizes="(max-width: 768px) 100vw, 960px" />
+        <h2>Hóa đơn mẫu phòng R101</h2>
+        <Image src={ledger} alt="Sổ đối chiếu RentFlow hiển thị công nợ, cách tính điện nước và lịch sử xác nhận thanh toán của hóa đơn mẫu R101" sizes="(max-width: 768px) 100vw, 960px" />
       </section>
       <section id="dung-thu"><Trial /></section>
     </main>
-    <footer className="mast"><strong>RentFlow</strong><span>Đăng ký bên trên để nhóm liên hệ với bạn.</span></footer>
+    <footer className="mast"><strong>RentFlow</strong><Link href="/quyen-rieng-tu">Quyền riêng tư</Link><a href="mailto:hoangphung.tech@gmail.com">Liên hệ nhóm RentFlow</a></footer>
   </>
 }

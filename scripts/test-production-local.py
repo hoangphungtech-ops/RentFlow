@@ -1,4 +1,5 @@
-﻿"""Smoke test the production images on an isolated, loopback-only Windows stack."""
+"""Smoke test the production images on an isolated, loopback-only Windows stack."""
+import json
 import os
 import pathlib
 import subprocess
@@ -57,15 +58,19 @@ def main():
             invoke([*compose, "cp", "edge:/data/caddy/pki/authorities/local/root.crt", str(certificate)])
             curl = [
                 "curl.exe", "--noproxy", "*", "--silent", "--show-error", "--fail", "--retry", "5",
-                "--retry-all-errors", "--cacert", str(certificate), "--resolve", f"{DOMAIN}:18443:127.0.0.1",
+                "--retry-all-errors", "--ssl-revoke-best-effort", "--cacert", str(certificate), "--resolve", f"{DOMAIN}:18443:127.0.0.1",
             ]
             for path in ["/", "/quyen-rieng-tu", "/xoa-tai-khoan", "/api/health"]:
                 response = invoke([*curl, "https://" + DOMAIN + ":18443" + path], stdout=subprocess.PIPE).stdout
                 if not response or (path == "/api/health" and b'"status":"ok"' not in response):
                     raise RuntimeError("Invalid HTTPS smoke response for " + path)
                 print("HTTPS smoke PASS", path, flush=True)
-            mapping = subprocess.run([*compose, "port", "mysql", "3306"], env=environment, capture_output=True)
-            if mapping.stdout.strip():
+            mysql = invoke([*compose, "ps", "-q", "mysql"], capture_output=True, text=True).stdout.strip()
+            bindings = invoke(
+                ["docker", "inspect", "--format", "{{json .HostConfig.PortBindings}}", mysql],
+                capture_output=True, text=True,
+            ).stdout
+            if any((json.loads(bindings) or {}).values()):
                 raise RuntimeError("MySQL unexpectedly has a host port")
             print("MySQL 3306 has no host mapping", flush=True)
         finally:

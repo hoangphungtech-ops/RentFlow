@@ -28,6 +28,7 @@ type Ledger = Lease & {
 const status: Record<string, string> = {
   ACTIVE: 'Đang thuê', DRAFT: 'Nháp', TERMINATED: 'Đã trả phòng', EXPIRED: 'Hết hạn',
   PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', REVERSED: 'Đã đảo',
+  ISSUED: 'Chưa thanh toán', PARTIALLY_PAID: 'Đã trả một phần', PAID: 'Đã thanh toán',
   CASH: 'Tiền mặt', TRANSFER: 'Chuyển khoản', DEPOSIT: 'Bù cọc',
 };
 
@@ -111,7 +112,7 @@ export default function App() {
     .sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod))[0];
   const date = (value: string) => new Date(value).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
   const website = (path: string) => void run(async () => {
-    if (!origin) throw new Error('Ch?a c? ??a ch? website.');
+    if (!origin) throw new Error('Chưa có địa chỉ website.');
     await Linking.openURL(origin + path);
   });
 
@@ -128,10 +129,10 @@ export default function App() {
     </View> : <>
       <Text style={styles.heading}>{dash.actor.fullName}</Text>
       <View style={styles.card}>
-        <Text style={styles.heading}>T?ng quan</Text>
-        <Text>{activeLease ? 'Ph?ng ' + activeLease.room.roomCode : 'Ch?a c? ph?ng ?ang thu?.'}</Text>
-        {latest ? <Text>K? {latest.billingPeriod} ? T?ng {money(latest.totalAmount)} ? ?? thu {money(latest.paidAmount)} ? C?n n? {money(latest.remainingAmount)}</Text> : <Text>Ch?a c? h?a ??n cho ph?ng ?ang thu?.</Text>}
-        <Button label="T?i d? li?u m?i" disabled={busy} press={() => void run(async () => {
+        <Text style={styles.heading}>Tổng quan</Text>
+        <Text>{activeLease ? 'Phòng ' + activeLease.room.roomCode : 'Chưa có phòng đang thuê.'}</Text>
+        {latest ? <Text>Kỳ {latest.billingPeriod} · Tổng {money(latest.totalAmount)} · Đã thu {money(latest.paidAmount)} · Còn nợ {money(latest.remainingAmount)}</Text> : <Text>Chưa có hóa đơn cho phòng đang thuê.</Text>}
+        <Button label="Tải dữ liệu mới" disabled={busy} press={() => void run(async () => {
           setDash(await request<Dashboard>('overview', token));
           if (ledger) setLedger(await request<Ledger>('leases/' + ledger.id + '/ledger', token));
         })} />
@@ -151,8 +152,8 @@ export default function App() {
       {ledger && <View style={styles.card}>
         <Text style={styles.heading}>Phòng {ledger.room.roomCode}</Text>
         <Text>{new Date(ledger.startDate).toLocaleDateString('vi-VN')} – {new Date(ledger.endDate).toLocaleDateString('vi-VN')}</Text>
-        <Text>Ti?n thu? {money(ledger.rentAmount)} ? {status[ledger.status] ?? ledger.status}</Text>
-        {ledger.tenants.filter(member => member.representative).map(member => <Text key={member.tenant.fullName}>??i di?n {member.tenant.fullName}</Text>)}
+        <Text>Tiền thuê {money(ledger.rentAmount)} · {status[ledger.status] ?? ledger.status}</Text>
+        {ledger.tenants.filter(member => member.representative).map(member => <Text key={member.tenant.fullName}>Đại diện {member.tenant.fullName}</Text>)}
         <Button label={settlement ? 'Thu gọn quyết toán' : 'Xem quyết toán'} disabled={busy} press={() => setSettlement(!settlement)} />
         {settlement && <>
           <Text>Cọc thỏa thuận {money(ledger.depositAgreed)} · Thực nhận {money(ledger.depositReceived)}</Text>
@@ -164,6 +165,7 @@ export default function App() {
         </>}
         {ledger.invoices.map(invoice => <View key={invoice.id} style={styles.section}>
           <Text style={styles.heading}>Hóa đơn {invoice.billingPeriod}</Text>
+          <Text>Hạn {date(invoice.dueDate)} · {status[invoice.status]}</Text>
           <Text>Tổng {money(invoice.totalAmount)} · Đã thu {money(invoice.paidAmount)} · Còn nợ {money(invoice.remainingAmount)}</Text>
           <Button label={expanded === invoice.id ? 'Thu gọn cách tính' : 'Xem cách tính'} disabled={busy} press={() => setExpanded(expanded === invoice.id ? '' : invoice.id)} />
           {expanded === invoice.id && <>
@@ -180,11 +182,11 @@ export default function App() {
         {dash.notifications.length ? dash.notifications.map(entry => <Text key={entry.id}>{entry.message}</Text>) : <Text>Chưa có thông báo.</Text>}
       </View>
       <View style={styles.card}>
-        <Text style={styles.heading}>T?i kho?n v? quy?n ri?ng t?</Text>
+        <Text style={styles.heading}>Tài khoản và quyền riêng tư</Text>
         <Text>{dash.actor.email}</Text>
-        <Button label="Quy?n ri?ng t?" disabled={busy} press={() => website('/quyen-rieng-tu')} />
-        <Button label="Y?u c?u x?a t?i kho?n" disabled={busy} press={() => website('/xoa-tai-khoan')} />
-        <Button label="Li?n h? h? tr?" disabled={busy} press={() => void run(async () => { await Linking.openURL('mailto:hoangphung.tech@gmail.com'); })} />
+        <Button label="Quyền riêng tư" disabled={busy} press={() => website('/quyen-rieng-tu')} />
+        <Button label="Yêu cầu xóa tài khoản" disabled={busy} press={() => website('/xoa-tai-khoan')} />
+        <Button label="Liên hệ hỗ trợ" disabled={busy} press={() => void run(async () => { await Linking.openURL('mailto:hoangphung.tech@gmail.com'); })} />
       </View>
     </>}
   </ScrollView>;

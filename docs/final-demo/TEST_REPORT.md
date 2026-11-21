@@ -1,5 +1,7 @@
 # Báo cáo kiểm thử RentFlow
 
+**Commit V4** `62a72437c62ba3fe8122ff137dab18c8d0f35888`. Hồi quy sau V5 ghi tại [báo cáo V5](../production/TEST_REPORT.md).
+
 **Môi trường** Windows, Node.js 24.18.0, Docker 28.5.1, MySQL 8.0.46, Prisma 6.19.3, Next.js 16.4.6, Microsoft Edge headless.
 
 ## Tái hiện

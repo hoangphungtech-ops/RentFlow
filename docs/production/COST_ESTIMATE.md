@@ -15,4 +15,4 @@ VPS gom chi phí và công quản trị vào một máy. Managed hosting có th�
 
 [Giá tham khảo VPS Hetzner](https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/)
 
-[Ph? ??ng k? Play Console](https://support.google.com/googleplay/android-developer/answer/6112435)
+[Phí đăng ký Play Console](https://support.google.com/googleplay/android-developer/answer/6112435)
