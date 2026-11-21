@@ -32,6 +32,15 @@ export function AccountSettings({ actor, properties, tenants, signedOut }: {
         await api('account/password/change', '', data)
         signedOut('Đã đổi mật khẩu. Vui lòng đăng nhập lại.')
       }} />
+      <details><summary>Xác minh hoặc đổi email</summary>
+        <Action title="Gửi mã xác minh email" button="Gửi mã" fields={[
+          field('email','Địa chỉ email cần xác minh','email'), field('currentPassword','Mật khẩu để xác minh email','password'),
+        ]} submit={data => api('account/email/request', '', data)} />
+        <Action title="Xác nhận địa chỉ email" button="Xác nhận email" fields={[field('code','Mã từ email','password')]} submit={async data => {
+          await api('account/email/confirm', '', data)
+          signedOut('Email đã được xác minh. Vui lòng đăng nhập lại.')
+        }} />
+      </details>
       <Action title="Đăng xuất thiết bị khác" button="Thu hồi phiên khác" submit={async () => {
         if (!window.confirm('Đăng xuất tất cả thiết bị khác?')) throw new Error('Đã hủy.')
         await api('account/sessions/revoke-others', '', {})
@@ -54,6 +63,13 @@ export function AccountSettings({ actor, properties, tenants, signedOut }: {
         <input aria-label="Mã lời mời" readOnly value={invitation.code} onFocus={event => event.target.select()} />
         <button className="ghost" onClick={() => setInvitation(undefined)}>Ẩn mã</button>
       </div>}
+      {properties.length > 0 && <Action title="Phân quyền theo khu trọ" fields={[
+        property, field('email','Email nhân viên hoặc kế toán','email'),
+        select('operation','Thao tác',[['GRANT','Cấp quyền'],['REVOKE','Thu hồi']]),
+      ]} submit={async ({ propertyId, ...data }) => {
+        await api('properties/' + propertyId + '/access', '', data)
+        await refresh()
+      }} />}
       {accounts?.map(account => <details key={account.id}>
         <summary>{account.fullName} · {roles.find(([key]) => key === account.role)?.[1]} · {account.lockedAt ? 'Đã khóa' : account.active ? 'Đang hoạt động' : 'Chờ kích hoạt'}</summary>
         <p>{account.username} · {account.email} · {account.emailVerifiedAt ? 'Email đã xác minh' : 'Email chưa xác minh'}</p>

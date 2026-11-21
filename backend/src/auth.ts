@@ -32,13 +32,13 @@ export class SessionGuard implements CanActivate {
     const cookie = webRequest(request) ? request.headers.cookie?.split(';').map(part => part.trim())
       .find(part => part.startsWith(sessionCookie + '='))?.slice(sessionCookie.length + 1) : undefined;
     const token = bearer ?? (cookie?.match(/^[a-f0-9]{64}$/) ? cookie : undefined);
-    if (!token) throw new UnauthorizedException('Vui lòng đăng nhập');
+    if (!token) throw new UnauthorizedException({ message: 'Vui lòng đăng nhập', code: 'SESSION_INVALID' });
     request.tokenHash = tokenHash(token);
     const session = await db.session.findUnique({
       where: { tokenHash: request.tokenHash },
       include: { user: { select: { ...actorSelect, lockedAt: true, isDemo: true } } },
     });
-    if (!session || session.expiresAt <= new Date() || session.user.lockedAt || (production() && session.user.isDemo)) throw new UnauthorizedException('Phiên đã hết hạn');
+    if (!session || session.expiresAt <= new Date() || session.user.lockedAt || (production() && session.user.isDemo)) throw new UnauthorizedException({ message: 'Phiên đã hết hạn', code: 'SESSION_INVALID' });
     const { lockedAt: _locked, isDemo: _demo, ...actor } = session.user;
     request.actor = actor;
     return true;

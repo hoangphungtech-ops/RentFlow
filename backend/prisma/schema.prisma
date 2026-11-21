@@ -352,12 +352,14 @@ model AccountDeletionRequest {
 enum AccountCodeKind {
   INVITE
   RESET
+  EMAIL
 }
 
 model AccountCode {
   hash String @id @db.Char(64)
   userId String @db.Char(36)
   kind AccountCodeKind
+  targetEmail String? @db.VarChar(254)
   expiresAt DateTime
   user User @relation(fields: [userId], references: [id])
   @@unique([userId, kind])

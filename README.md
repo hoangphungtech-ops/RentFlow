@@ -31,6 +31,8 @@ Mật khẩu của tài khoản mẫu do người chạy đặt trong `DEMO_PASS
 ## Bàn giao
 
 - [Tài khoản demo và quản lý truy cập V6](docs/final-demo/DEMO_ACCOUNTS.md)
+- [Hướng dẫn sử dụng RentFlow](docs/final-demo/USER_GUIDE.md)
+- [Checklist nghiệm thu V7](docs/final-demo/ACCEPTANCE_V7.md)
 - [Trạng thái P01–P07](docs/final-demo/PRODUCT_STATUS.md)
 - [Thiết kế và hướng dẫn baseline](docs/final-demo/BASELINE_README.md)
 - [Kiến trúc](docs/final-demo/ARCHITECTURE.md)

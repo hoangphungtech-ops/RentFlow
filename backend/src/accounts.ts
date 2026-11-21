@@ -1,7 +1,9 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Logger, Param, Post, Req, Res, ServiceUnavailableException, UnauthorizedException, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { sendAccountMail } from './account-mail';
 import { AccountCodeKind } from '@prisma/client';
 import { actorSelect, db, matchesPassword, passwordHash, SessionGuard, SessionRequest, tokenHash, Tx } from './auth';
 import { production, setBrowserSession, webRequest } from './browser-session';
@@ -19,13 +21,13 @@ const managedSelect = {
 } as const;
 const invalidCode = () => new UnauthorizedException('Mã không hợp lệ hoặc đã hết hạn.');
 
-export async function issueCode(tx: Tx, userId: string, kind: AccountCodeKind) {
+export async function issueCode(tx: Tx, userId: string, kind: AccountCodeKind, targetEmail: string | null = null) {
   const code = randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + (kind === 'RESET' ? 20 : 1440) * 60_000);
+  const expiresAt = new Date(Date.now() + (kind === 'INVITE' ? 1440 : 20) * 60_000);
   await tx.accountCode.upsert({
     where: { userId_kind: { userId, kind } },
-    create: { userId, kind, hash: tokenHash(code), expiresAt },
-    update: { hash: tokenHash(code), expiresAt },
+    create: { userId, kind, hash: tokenHash(code), expiresAt, targetEmail },
+    update: { hash: tokenHash(code), expiresAt, targetEmail },
   });
   return { code, expiresAt };
 }
@@ -35,9 +37,43 @@ async function revoke(tx: Tx, userId: string) {
   await tx.accountCode.deleteMany({ where: { userId } });
 }
 
+const message = 'Nếu thông tin phù hợp, yêu cầu sẽ được xử lý qua kênh hỗ trợ đã xác minh.';
+const logger = new Logger('AccountMail');
+let activeRecoveries = 0;
+
+async function dispatchRecovery(address: string) {
+  if (activeRecoveries >= 8) return;
+  activeRecoveries++;
+  try {
+    const target = await atomic(async tx => {
+      const account = await tx.user.findUnique({ where: { email: address } });
+      if (!account?.passwordHash || account.lockedAt || (production() && account.isDemo)) return;
+      const now = new Date();
+      if (sendAccountMail && account.emailVerifiedAt && account.recoveryRequestedAt &&
+          +now - +account.recoveryRequestedAt < 60_000) return;
+      await tx.user.update({ where: { id: account.id }, data: { recoveryRequestedAt: now } });
+      if (!sendAccountMail || !account.emailVerifiedAt) return;
+      return issueCode(tx, account.id, 'RESET');
+    });
+    if (target && sendAccountMail) {
+      try { await sendAccountMail(address, 'reset', target.code); }
+      catch {
+        await db.accountCode.deleteMany({ where: { hash: tokenHash(target.code) } });
+        logger.warn('Password recovery email delivery failed');
+      }
+    }
+  } catch { logger.warn('Password recovery request could not be processed'); }
+  finally { activeRecoveries--; }
+}
+
+@ApiTags('Authentication')
 @Controller()
 export class AccountAuthentication {
   @Post('login')
+  @ApiOperation({ summary: 'Sign in by username or email. Browser clients can request an HttpOnly cookie via X-RentFlow-Web: 1.' })
+  @ApiBody({ schema: { type: 'object', required: ['password'], anyOf: [{ required: ['identifier'] }, { required: ['email'] }], properties: {
+    identifier: { type: 'string' }, email: { type: 'string', format: 'email' }, password: { type: 'string', format: 'password' },
+  } } })
   @HttpCode(200)
   async login(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     const input = parse(z.object({ identifier: label(254).optional(), email: email.optional(), password })
@@ -62,21 +98,27 @@ export class AccountAuthentication {
   }
 
   @Post('auth/forgot-password')
+  @ApiBody({ schema: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } })
   @HttpCode(200)
   async forgot(@Body() body: unknown) {
     const data = parse(z.object({ email }), body);
-    await db.user.updateMany({
-      where: { email: data.email, lockedAt: null, passwordHash: { not: null }, ...(production() ? { isDemo: false } : {}) },
-      data: { recoveryRequestedAt: new Date() },
-    });
-    return { message: 'Nếu thông tin phù hợp, yêu cầu sẽ được xử lý qua kênh hỗ trợ đã xác minh.' };
+    void dispatchRecovery(data.email);
+    return { message };
   }
 
   @Post('auth/activate')
+  @ApiBody({ schema: { type: 'object', required: ['code', 'newPassword', 'confirmPassword'], properties: {
+    code: { type: 'string', format: 'password' }, newPassword: { type: 'string', format: 'password', minLength: 12 },
+    confirmPassword: { type: 'string', format: 'password', minLength: 12 },
+  } } })
   @HttpCode(200)
   activate(@Body() body: unknown) { return this.consume('INVITE', body); }
 
   @Post('auth/reset-password')
+  @ApiBody({ schema: { type: 'object', required: ['code', 'newPassword', 'confirmPassword'], properties: {
+    code: { type: 'string', format: 'password' }, newPassword: { type: 'string', format: 'password', minLength: 12 },
+    confirmPassword: { type: 'string', format: 'password', minLength: 12 },
+  } } })
   @HttpCode(200)
   reset(@Body() body: unknown) { return this.consume('RESET', body); }
 
@@ -99,6 +141,9 @@ export class AccountAuthentication {
   }
 }
 
+@ApiTags('Accounts')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Missing, expired or revoked session.' })
 @UseGuards(SessionGuard)
 @Controller()
 export class AccountManagement {
@@ -123,6 +168,7 @@ export class AccountManagement {
   }
 
   @Post('account/password/change')
+  @ApiBody({ schema: { type: 'object', required: ['currentPassword','newPassword','confirmPassword'], properties: { currentPassword: { type: 'string', format: 'password' }, newPassword: { type: 'string', format: 'password', minLength: 12 }, confirmPassword: { type: 'string', format: 'password', minLength: 12 } } } })
   async change(@Req() req: SessionRequest, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     const input = parse(z.object({ currentPassword: password, ...confirmation }), body);
     requireCondition(input.newPassword === input.confirmPassword && input.newPassword !== input.currentPassword,
@@ -138,6 +184,49 @@ export class AccountManagement {
     return { ok: true };
   }
 
+  @Post('account/email/request')
+  @ApiOperation({ summary: 'Send a one-time confirmation to a new address' })
+  @ApiBody({ schema: { type: 'object', required: ['email', 'currentPassword'], properties: {
+    email: { type: 'string', format: 'email' }, currentPassword: { type: 'string', format: 'password' },
+  } } })
+  async requestEmail(@Req() { actor }: SessionRequest, @Body() body: unknown) {
+    const input = parse(z.object({ email, currentPassword: password }), body);
+    if (!sendAccountMail) throw new ServiceUnavailableException('Gửi mã email chưa được cấu hình. Hãy liên hệ người vận hành.');
+    const pending = await atomic(async tx => {
+      const user = found(await tx.user.findUnique({ where: { id: actor.id } }));
+      if (user.lockedAt || !matchesPassword(input.currentPassword, user.passwordHash)) {
+        throw new UnauthorizedException('Mật khẩu hiện tại không đúng.');
+      }
+      requireCondition(input.email !== user.email || !user.emailVerifiedAt, 'Địa chỉ email đã được xác minh.');
+      return issueCode(tx, user.id, 'EMAIL', input.email);
+    });
+    try { await sendAccountMail(input.email, 'email', pending.code); }
+    catch {
+      await db.accountCode.deleteMany({ where: { hash: tokenHash(pending.code) } });
+      throw new ServiceUnavailableException('Chưa gửi được mã. Vui lòng thử lại hoặc liên hệ người vận hành.');
+    }
+    return { ok: true };
+  }
+
+  @Post('account/email/confirm')
+  @ApiOperation({ summary: 'Confirm the new email and revoke existing sessions' })
+  @ApiBody({ schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', format: 'password' } } } })
+  async confirmEmail(@Req() req: SessionRequest, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
+    const { code } = parse(z.object({ code: z.string().regex(/^[a-f0-9]{64}$/) }), body);
+    await atomic(async tx => {
+      const pending = await tx.accountCode.findUnique({ where: { hash: tokenHash(code) }, include: { user: true } });
+      if (!pending?.targetEmail || pending.kind !== 'EMAIL' || pending.userId !== req.actor.id ||
+          pending.user.lockedAt || pending.expiresAt <= new Date()) throw invalidCode();
+      await tx.user.update({ where: { id: pending.userId }, data: {
+        email: pending.targetEmail, emailVerifiedAt: new Date(), recoveryRequestedAt: null,
+      } });
+      await revoke(tx, pending.userId);
+      await audit(tx, req.actor, 'EMAIL_CHANGED', pending.userId);
+    });
+    if (webRequest(req)) setBrowserSession(res);
+    return { ok: true };
+  }
+
   @Get('accounts')
   async list(@Req() { actor }: SessionRequest) {
     allow(actor, 'OWNER');
@@ -148,6 +237,7 @@ export class AccountManagement {
   }
 
   @Post('accounts')
+  @ApiBody({ schema: { type: 'object', required: ['username','email','fullName','role','propertyId'], properties: { username: { type: 'string' }, email: { type: 'string', format: 'email' }, fullName: { type: 'string' }, role: { type: 'string', enum: ['STAFF','ACCOUNTANT','RENTER'] }, propertyId: { type: 'string', format: 'uuid' } } } })
   async create(@Req() { actor }: SessionRequest, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     allow(actor, 'OWNER');
     const input = parse(z.object({ username, email, fullName: label(120), role, propertyId: id }), body);
@@ -163,6 +253,7 @@ export class AccountManagement {
   }
 
   @Post('accounts/:userId/link-tenant')
+  @ApiBody({ schema: { type: 'object', required: ['tenantId'], properties: { tenantId: { type: 'string', format: 'uuid' } } } })
   async linkTenant(@Req() { actor }: SessionRequest, @Param('userId') userId: string, @Body() body: unknown) {
     allow(actor, 'OWNER');
     const { tenantId } = parse(z.object({ tenantId: id }), body);
@@ -177,6 +268,7 @@ export class AccountManagement {
   }
 
   @Post('accounts/:userId/profile')
+  @ApiBody({ schema: { type: 'object', required: ['username','fullName','role'], properties: { username: { type: 'string' }, email: { type: 'string', format: 'email', description: 'Pending accounts only.' }, fullName: { type: 'string' }, role: { type: 'string', enum: ['STAFF','ACCOUNTANT','RENTER'] } } } })
   async edit(@Req() { actor }: SessionRequest, @Param('userId') userId: string, @Body() body: unknown) {
     allow(actor, 'OWNER');
     const input = parse(z.object({ fullName: label(120), username, role, email: email.optional() }), body);
@@ -195,6 +287,7 @@ export class AccountManagement {
   }
 
   @Post('accounts/:userId/control')
+  @ApiBody({ schema: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ['LOCK','UNLOCK','REVOKE','INVITE'] } } } })
   async control(@Req() { actor }: SessionRequest, @Param('userId') userId: string,
     @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     allow(actor, 'OWNER');

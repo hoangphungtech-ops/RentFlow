@@ -34,3 +34,16 @@ Khi có người thử, ghi thời gian, tỷ lệ hoàn thành, bước vướn
 8. **Tiền cọc có căn cứ gì.** Thực nhận, biên bản trả, lý do khấu trừ và hóa đơn được bù xuất hiện cùng quyết toán.
 9. **Mất kết nối xử lý thế nào.** Form báo lỗi và giữ dữ liệu đang nhập. Gửi lại khoản thu dùng cùng khóa cho cùng dữ liệu trong phiên thao tác.
 10. **Trước khi triển khai thực.** Rà soát bảo mật, TLS, vận hành sao lưu và vòng đời tài khoản.
+
+## Kịch bản V7 trên Windows, 10–12 phút
+
+| Thời gian | Thao tác |
+|---|---|
+| 0:00–1:00 | Mở Landing Page, Web Admin và health. Giải thích vai trò chủ trọ, nhân viên và người thuê. |
+| 1:00–3:00 | Chủ trọ tạo nhân viên. Kích hoạt với mã mời qua cửa sổ khác. Cấp rồi thu hồi quyền một khu, kiểm tra tài khoản chỉ thấy khu được phép. |
+| 3:00–5:00 | Xem bộ lọc phòng. Tạo phòng và hồ sơ người thuê, lập hợp đồng, kích hoạt và xác nhận nhận phòng. Chuẩn bị sẵn đơn giá mẫu. |
+| 5:00–8:00 | Ghi điện 100 → 220 và nước 20 → 25, phát hành hóa đơn 3.620.000đ. Báo rồi xác nhận khoản thu 2.000.000đ. Mở sổ đối chiếu với công nợ 1.620.000đ. |
+| 8:00–10:00 | Ghi cọc 2.000.000đ, xác nhận trả phòng. Khấu trừ 300.000đ, bù nợ 500.000đ, mở quyết toán hoàn 1.200.000đ. Mở lịch sử phòng. |
+| 10:00–12:00 | Mở sổ người thuê tại độ rộng 360 px. Trình bày kết quả test, trạng thái SMTP và các điều kiện Android/Play. |
+
+Dùng phòng riêng và tài khoản thử cho buổi trình bày để giữ nguyên dữ liệu mẫu R101/R110. Đi theo [hướng dẫn thao tác](USER_GUIDE.md). Chạy `powershell -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1` khi cần khởi động trên Windows. Tùy chọn `-Seed` chỉ dành cho database demo mới cần dữ liệu mẫu.

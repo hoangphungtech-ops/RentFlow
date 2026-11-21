@@ -20,3 +20,11 @@ Nếu migration tương thích ngược, đặt `RENTFLOW_RELEASE` về SHA đã
 ## Kiểm thử image trước VPS
 
 Build image với `RENTFLOW_RELEASE=local-build-check` và cấu hình tổng hợp bằng `docker compose -f deploy/compose.production.yml build api web migrate`. Trên Windows, `python scripts/test-production-local.py` dùng các image này để kiểm tra HTTPS qua CA nội bộ trên loopback, rồi dừng container. Kiểm tra DNS và ACME trên VPS là bước riêng.
+
+## SMTP V7
+
+Đặt `SMTP_HOST`, `SMTP_FROM`, `SMTP_PORT` và cặp `SMTP_USER`/`SMTP_PASSWORD` nếu máy chủ yêu cầu xác thực. Dùng file môi trường riêng. Port 465 dùng TLS ngay khi kết nối. Các port khác yêu cầu STARTTLS. Giữ mặc định xác minh chứng chỉ.
+
+Quên mật khẩu qua SMTP chỉ tự gửi cho tài khoản đã xác minh email. Yêu cầu trả thông báo chung và gửi ở nền, có giới hạn theo IP và thời gian chờ theo tài khoản đã xác minh. Tiến trình hiện chưa có hàng đợi bền vững; nếu gửi thất bại, dùng lại form hoặc quy trình CLI. Đổi email yêu cầu mật khẩu hiện tại và mã chứng minh quyền nhận thư ở địa chỉ mới. Mã không xuất hiện trong phản hồi. Sau khi xác nhận, các phiên bị thu hồi.
+
+Để kiểm tra trước khi mở cho người dùng, chạy test loopback, sau đó gửi tới địa chỉ thử do nhóm sở hữu bằng SMTP thật. Xác minh địa chỉ gửi, TLS, nhận email và thu hồi phiên. [Cấu hình SMTP Nodemailer](https://nodemailer.com/smtp)

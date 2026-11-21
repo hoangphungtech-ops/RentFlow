@@ -1,0 +1,3 @@
+ALTER TABLE `AccountCode`
+    MODIFY COLUMN `kind` ENUM('INVITE','RESET','EMAIL') NOT NULL,
+    ADD COLUMN `targetEmail` VARCHAR(254) NULL;

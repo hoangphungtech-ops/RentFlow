@@ -85,6 +85,21 @@ export class RentalController {
     });
   }
 
+  @Get('rooms/:roomId/history')
+  async roomHistory(@Req() { actor }: SessionRequest, @Param('roomId') roomId: string) {
+    return found(await db.room.findFirst({
+      where: { id: roomId, property: propertyScope(actor) },
+      select: {
+        leases: { orderBy: [{ startDate: 'desc' }, { id: 'desc' }], take: 50, select: {
+          id: true, startDate: true, endDate: true, status: true,
+        } },
+        meterReadings: { orderBy: { billingPeriod: 'desc' }, take: 50, select: {
+          billingPeriod: true, electricOld: true, electricNew: true, waterOld: true, waterNew: true,
+        } },
+      },
+    }));
+  }
+
   @Post('properties/:propertyId/rooms')
   async room(@Req() { actor }: SessionRequest, @Param('propertyId') propertyId: string, @Body() body: unknown) {
     allow(actor, 'OWNER');

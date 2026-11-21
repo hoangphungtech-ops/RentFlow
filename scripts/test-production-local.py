@@ -10,7 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOMAIN = "rentflow.localhost"
 TAG = os.environ.get("RENTFLOW_SMOKE_TAG", "local-build-check")
 password = uuid.uuid4().hex
-project = "rentflow-v5-smoke-" + password[:6]
+project = "rentflow-smoke-" + password[:6]
 environment = dict(
     os.environ,
     RENTFLOW_DOMAIN=DOMAIN,
@@ -74,14 +74,32 @@ def main():
                 raise RuntimeError("MySQL unexpectedly has a host port")
             print("MySQL 3306 has no host mapping", flush=True)
             demo_check = """
-            const { PrismaClient } = require('@prisma/client');
-            const db = new PrismaClient();
-            db.user.count({ where: { username: 'testadmin' } })
-              .then(count => { if (count) throw Error('Demo account present in production bootstrap'); })
-              .finally(() => db.$disconnect());
+            const assert = require('node:assert/strict');
+            const { randomUUID } = require('node:crypto');
+            const { db, passwordHash } = require('./dist/src/auth');
+            async function verify() {
+              assert.equal(await db.user.count({ where: { username: 'testadmin' } }), 0);
+              const password = randomUUID();
+              const hash = passwordHash(password);
+              const login = identifier => fetch('http://127.0.0.1:3001/api/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-RentFlow-Web': '1' },
+                body: JSON.stringify({ identifier, password }),
+              });
+              await db.user.create({ data: { username: 'testadmin', email: 'demo@rentflow.test',
+                fullName: 'Smoke demo fixture', role: 'OWNER', isDemo: true, passwordHash: hash } });
+              assert.equal((await login('testadmin')).status, 401);
+              await db.user.create({ data: { email: 'smoke@rentflow.test',
+                fullName: 'Smoke renter fixture', role: 'RENTER', passwordHash: hash } });
+              const response = await login('smoke@rentflow.test');
+              assert.equal(response.status, 200);
+              const cookie = response.headers.get('set-cookie') ?? '';
+              assert(cookie.includes('Secure') && cookie.includes('HttpOnly') && cookie.includes('SameSite=Strict'));
+              assert.equal((await response.json()).token, undefined);
+            }
+            verify().catch(() => { process.exitCode = 1; }).finally(() => db.$disconnect());
             """
             invoke([*compose, "exec", "-T", "api", "node", "-e", demo_check])
-            print("Production bootstrap left demo account absent", flush=True)
+            print("Production bootstrap left demo account absent, denied copied demo fixture and served a Secure HttpOnly cookie", flush=True)
         finally:
             invoke([*compose, "stop", "edge", "web", "api", "mysql"])
 

@@ -5,7 +5,7 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StatusBar, StyleShee
 const origin = process.env.EXPO_PUBLIC_API_ORIGIN?.replace(/\/$/, '');
 const tokenKey = 'rentflow.session.v1';
 class ApiError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+  constructor(message: string, readonly status: number, readonly code?: string) { super(message); }
 }
 const money = (value: string) => Number(value).toLocaleString('vi-VN') + ' đ';
 type Lease = { id: string; room: { roomCode: string }; startDate: string; endDate: string; status: string };
@@ -44,7 +44,7 @@ async function request<T>(path: string, token = '', body?: object): Promise<T> {
       signal: controller.signal,
     }).catch(() => { throw new Error('Không kết nối được RentFlow. Vui lòng thử lại.'); });
     const result = await response.json().catch(() => null);
-    if (!response.ok) throw new Error([result?.message ?? 'Máy chủ chưa sẵn sàng.'].flat().join(' · '));
+    if (!response.ok) throw new ApiError([result?.message ?? 'Máy chủ chưa sẵn sàng.'].flat().join(' · '), response.status, result?.code);
     return result as T;
   } finally { clearTimeout(timeout); }
 }
@@ -93,7 +93,7 @@ export default function App() {
     try { await work(); }
     catch (failure) {
       if (failure instanceof ApiError && failure.status === 401 && token &&
-          failure.message.includes('Phiên')) {
+          failure.code === 'SESSION_INVALID') {
         await SecureStore.deleteItemAsync(tokenKey);
         setDash(undefined); setLedger(undefined); setToken('');
       }

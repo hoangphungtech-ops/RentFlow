@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { Action, api, ApiError, field, select, vnd } from '../shared'
 import { AccountSettings } from './accounts'
+import { RoomList } from './rooms'
 import { AdminForms } from './forms'
 
 type Person = { id: string; fullName: string; propertyId: string }
@@ -34,7 +35,6 @@ export default function Dashboard() {
   const [current, setCurrent] = useState('')
   const [tab, setTab] = useState('Tổng quan')
   const [ready, setReady] = useState(false)
-  const [search, setSearch] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const paymentRequest = useRef(new Map<string, string>())
@@ -109,13 +109,7 @@ export default function Dashboard() {
           {overview.leases.filter(lease => lease.status === 'ACTIVE' && +new Date(lease.endDate) >= +now && +new Date(lease.endDate) - +now <= 30 * 86400000).map(lease =>
             <p key={lease.id}>{lease.room.roomCode} · {date(lease.endDate)}</p>)}
         </>}
-        {tab === 'Khu trọ & phòng' && <>
-          <label>Tìm phòng<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Mã phòng hoặc tên khu" /></label>
-          {overview.properties.map(property => <section key={property.id} className="card"><h2>{property.name}</h2><p>{property.address}</p>
-            {property.rooms.filter(room => (room.roomCode + ' ' + property.name).toLowerCase().includes(search.toLowerCase())).map(room =>
-              <p key={room.id}><strong>{room.roomCode}</strong> · {labels[room.status]} · {vnd(room.baseRentPrice)} · {room.maxOccupants} người</p>)}
-          </section>)}
-        </>}
+        {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} />}
         {tab === 'Người thuê' && <ul>{overview.tenants.map(person => <li key={person.id}>{person.fullName}</li>)}</ul>}
         {tab === 'Điện nước' && overview.properties.map(property => <section key={property.id} className="card"><h2>{property.name}</h2>{property.utilityRates.map(rate =>
           <p key={rate.id}>{rate.serviceName} · {vnd(rate.unitPrice)}/{rate.unit} · {date(rate.effectiveFrom)}</p>)}</section>)}

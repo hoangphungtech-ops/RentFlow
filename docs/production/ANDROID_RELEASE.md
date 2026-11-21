@@ -11,3 +11,9 @@ Chạy cài đặt APK và test đăng nhập, liên thông, lỗi mạng, phiê
 ## Bằng chứng build local
 
 Expo export Android tạo Hermes bundle `index-d0e7105aa275bd2178d6d122dea26fe5.hbc`. SHA-256 `a68369af1b793ce304e1fd827580d1b737d891c71fdf8e23e68f0d4cb05b289f`. Typecheck và config introspect đạt. Bundle chưa gắn môi trường release.
+
+## Môi trường API Android V7
+
+- Dev native trên emulator dùng `http://10.0.2.2:3000` khi bật riêng `RENTFLOW_ANDROID_DEV_HTTP=1`. Thiết bị dùng USB với adb reverse có thể dùng `127.0.0.1`. Cờ này chỉ áp dụng khi tạo bản native development. Dùng staging HTTPS khi thử qua Wi-Fi.
+- Staging dùng một origin HTTPS có chứng chỉ tin cậy. Kiểm tra API và người thuê mẫu trước khi mở cho tester.
+- Profile APK internal và AAB production đòi origin HTTPS và application ID được cấp. Cờ dev HTTP bị bỏ qua ở chế độ release. Bước kiểm thử thực tế cần SDK/thiết bị hoặc dịch vụ build được ủy quyền và cấu hình ký do chủ tài khoản quản lý.
