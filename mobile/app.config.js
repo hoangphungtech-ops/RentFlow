@@ -1,7 +1,8 @@
 const { isIP } = require('node:net');
 
 module.exports = ({ config }) => {
-  const release = process.env.RENTFLOW_RELEASE_BUILD === '1';
+  const release = process.env.RENTFLOW_RELEASE_BUILD === '1' ||
+    ['internal', 'production'].includes(process.env.EAS_BUILD_PROFILE ?? '');
   const value = process.env.EXPO_PUBLIC_API_ORIGIN;
   const endpoint = value ? new URL(value) : undefined;
   if (endpoint && (endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash)) {

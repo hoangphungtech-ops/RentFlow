@@ -1,11 +1,11 @@
-﻿const { test } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const config = require('../app.config.js');
 
-function settings({ origin, release, devHttp, packageName }) {
+function settings({ origin, release, devHttp, packageName, profile }) {
   const variables = {
     EXPO_PUBLIC_API_ORIGIN: origin, RENTFLOW_RELEASE_BUILD: release,
-    RENTFLOW_ANDROID_DEV_HTTP: devHttp, RENTFLOW_ANDROID_PACKAGE: packageName,
+    RENTFLOW_ANDROID_DEV_HTTP: devHttp, RENTFLOW_ANDROID_PACKAGE: packageName, EAS_BUILD_PROFILE: profile,
   };
   const before = { ...process.env };
   try {
@@ -33,4 +33,17 @@ test('Android development HTTP is opt-in and loopback-only', () => {
   assert.throws(() => settings({origin:'http://127.0.0.1:3000'}), /HTTPS/);
   assert.throws(() => settings({origin:'http://192.168.1.3:3000',devHttp:'1'}), /HTTPS/);
   assert.equal(settings({origin:'http://10.0.2.2:3000',devHttp:'1'}).plugins[1][1].android.usesCleartextTraffic,true);
+});
+
+test('EAS profiles separate staging APK and production AAB', () => {
+  const { build } = require('../eas.json');
+  assert.equal(build.internal.environment,'preview');
+  assert.equal(build.internal.android.buildType,'apk');
+  assert.equal(build.production.environment,'production');
+  assert.equal(build.production.android.buildType,'app-bundle');
+  for (const profile of ['internal','production']) {
+    assert.equal(build[profile].credentialsSource,'remote');
+    assert.throws(() => settings({profile,origin:'http://10.0.2.2:3000',devHttp:'1'}), /HTTPS/);
+    assert.throws(() => settings({profile,origin:'https://rentflow.example.org'}), /application ID/);
+  }
 });

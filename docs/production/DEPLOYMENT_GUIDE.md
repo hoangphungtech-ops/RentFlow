@@ -28,3 +28,9 @@ Build image với `RENTFLOW_RELEASE=local-build-check` và cấu hình tổng h�
 Quên mật khẩu qua SMTP chỉ tự gửi cho tài khoản đã xác minh email. Yêu cầu trả thông báo chung và gửi ở nền, có giới hạn theo IP và thời gian chờ theo tài khoản đã xác minh. Tiến trình hiện chưa có hàng đợi bền vững; nếu gửi thất bại, dùng lại form hoặc quy trình CLI. Đổi email yêu cầu mật khẩu hiện tại và mã chứng minh quyền nhận thư ở địa chỉ mới. Mã không xuất hiện trong phản hồi. Sau khi xác nhận, các phiên bị thu hồi.
 
 Để kiểm tra trước khi mở cho người dùng, chạy test loopback, sau đó gửi tới địa chỉ thử do nhóm sở hữu bằng SMTP thật. Xác minh địa chỉ gửi, TLS, nhận email và thu hồi phiên. [Cấu hình SMTP Nodemailer](https://nodemailer.com/smtp)
+
+## Cấu hình SMTP V8
+
+Đặt riêng `SMTP_HOST` và `SMTP_PORT`, không ghép URL hoặc credentials vào host. Chọn `SMTP_SECURITY=auto` cho mặc định TLS ở port 465 và STARTTLS ở các port khác. Dùng `tls` để yêu cầu TLS ngay khi kết nối hoặc `starttls` khi nhà cung cấp chỉ định nâng cấp kết nối. `SMTP_FROM` là địa chỉ gửi đã xác minh. Đặt đồng thời `SMTP_USER` và `SMTP_PASSWORD` nếu nhà cung cấp yêu cầu. Nhập trực tiếp vào cấu hình bí mật của máy vận hành. [SMTP transport](https://nodemailer.com/smtp)
+
+Chạy `npm.cmd --prefix backend run test:smtp` với MySQL demo hoặc dùng [bộ test biệt lập V8](../final-demo/TEST_REPORT_V8.md). SMTP loopback chỉ dùng trong test local. Khi chuyển sang nhà cung cấp, kiểm tra nhận mã trong hộp thư thử do nhóm quản lý. Kiểm tra giới hạn tần suất, hết hạn, dùng lại mã và thu hồi phiên sau reset. Nếu chưa có SMTP hoặc giao nhận lỗi, người vận hành vẫn có luồng CLI đã xác minh trong [hướng dẫn tài khoản](../final-demo/DEMO_ACCOUNTS.md).

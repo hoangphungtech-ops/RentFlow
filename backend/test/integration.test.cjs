@@ -57,6 +57,10 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     assert(!overview.properties.some(row => row.id === propertyB));
     await post(owner, 'properties/' + propertyB + '/rooms', { roomCode: unique, baseRentPrice: 1, maxOccupants: 1 }, 404);
     await ledger(otherOwner, seededLeaseId, 404);
+    const roomId = property.rooms.find(room => room.roomCode === 'R101').id;
+    await api('rooms/' + roomId + '/history', { token: owner });
+    await api('rooms/' + roomId + '/history', { token: otherOwner, expected: 404 });
+    await api('rooms/' + roomId + '/history', { token: renter, expected: 404 });
   });
   await t.test('RF02 renter cannot read another contract or manage property', async () => {
     await ledger(outsider, seededLeaseId, 404);

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('playwright-core');
 const { randomUUID } = require('node:crypto');
 
-const base = 'http://127.0.0.1:3000';
+const base = process.env.RENTFLOW_TEST_ORIGIN ?? 'http://127.0.0.1:3000';
 const password = process.env.DEMO_PASSWORD;
 async function login(page, email) {
   await page.goto(base + '/quan-ly');
@@ -173,6 +173,7 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
         await showLease();
         await page.getByText(/Tổng 3\.620\.000/).waitFor();
         const payment = await action(page, 'Báo thanh toán', { amount: '2000000', method: 'TRANSFER' }, 'invoices/' + invoice.id + '/payments');
+        await page.getByText(/Chuyển khoản · 2\.000\.000.*Chờ xác nhận/).waitFor({ state: 'attached' });
         await page.getByText('Xem cách tính').click();
         await action(page, 'Xác nhận khoản thu', {}, 'payments/' + payment.id + '/confirm');
         await page.getByText(/Còn nợ 1\.620\.000/).last().waitFor();
@@ -185,6 +186,7 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
         await navigate('Tiền cọc');
         await showLease();
         await action(page, 'Chốt quyết toán phòng ' + tag, { deduction: '300000', debtOffset: '500000', invoiceId: invoice.id, reason: 'Khấu trừ Edge' }, leasePath + '/settlement');
+        await page.getByText(/Hoàn cọc 1\.200\.000/).waitFor({ state: 'attached' });
         await page.getByText('Xem quyết toán').click();
         await page.getByText(/Hoàn cọc 1\.200\.000/).waitFor();
         await navigate('Khu trọ & phòng');

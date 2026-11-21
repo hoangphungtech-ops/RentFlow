@@ -25,6 +25,7 @@ services:
       PUBLIC_ORIGIN: https://${RENTFLOW_DOMAIN:?required}
       TRUST_PROXY_HOPS: 1
       SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-auto}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_USER: ${SMTP_USER:-}

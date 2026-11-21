@@ -1,4 +1,4 @@
-﻿const { test } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createServer } = require('node:net');
 const { once } = require('node:events');
@@ -61,7 +61,7 @@ test('real SMTP loopback: possession proof, owner binding, new login, recovery a
   const child = spawn(process.execPath, ['--env-file=.env', 'dist/src/main.js'], {
     env: { ...process.env, NODE_ENV: 'test', PUBLIC_ORIGIN: '', PORT: String(apiPort), API_HOST: '127.0.0.1',
       SMTP_HOST: '127.0.0.1', SMTP_PORT: String(smtpPort), SMTP_FROM: 'sender@rentflow.test',
-      SMTP_USER: '', SMTP_PASSWORD: '', SMTP_LOOPBACK_TEST: '1' },
+      SMTP_USER: '', SMTP_PASSWORD: '', SMTP_SECURITY: 'auto', SMTP_LOOPBACK_TEST: '1' },
     stdio: 'ignore',
   });
   const tag = randomUUID().slice(0,16);
@@ -105,7 +105,20 @@ test('real SMTP loopback: possession proof, owner binding, new login, recovery a
     const mail = await waitFor(() => received[1]);
     assert.equal(received.length,2);
     assert(mail.recipient.includes(targetEmail));
-    const reset = mail.content.match(/\b[a-f0-9]{64}\b/)[0];
+    const expired = mail.content.match(/\b[a-f0-9]{64}\b/)[0];
+    const account = await db.user.findUniqueOrThrow({ where: { email: targetEmail } });
+    const lookup = { userId_kind: { userId: account.id, kind: 'RESET' } };
+    const issued = await db.accountCode.findUniqueOrThrow({ where: lookup });
+    await db.accountCode.update({ where: lookup, data: { expiresAt: new Date(0) } });
+    await post('auth/reset-password', {code:expired,newPassword:updated,confirmPassword:updated},401);
+    await post('auth/forgot-password',{email:targetEmail},200);
+    await delay(250);
+    assert.equal(received.length,2);
+    assert.equal((await db.accountCode.findUniqueOrThrow({ where: lookup })).hash,issued.hash);
+    await db.user.update({ where: { id: account.id }, data: { recoveryRequestedAt: new Date(0) } });
+    await post('auth/forgot-password',{email:targetEmail},200);
+    const refreshed = await waitFor(() => received[2]);
+    const reset = refreshed.content.match(/\b[a-f0-9]{64}\b/)[0];
     const body = {code:reset,newPassword:updated,confirmPassword:updated};
     await post('auth/reset-password',body,200);
     await post('auth/reset-password',body,401);

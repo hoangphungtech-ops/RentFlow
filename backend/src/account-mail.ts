@@ -1,4 +1,4 @@
-﻿import nodemailer from 'nodemailer';
+import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import { production } from './browser-session';
 
@@ -10,8 +10,9 @@ export function configureMail() {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASSWORD;
   if (Boolean(user) !== Boolean(pass)) throw new Error('Incomplete SMTP authentication');
-  const secure = port === 465;
-  const localTest = !production() && host === '127.0.0.1' && process.env.SMTP_LOOPBACK_TEST === '1';
+  const security = z.enum(['auto', 'tls', 'starttls']).parse(process.env.SMTP_SECURITY || 'auto');
+  const secure = security === 'tls' || (security === 'auto' && port === 465);
+  const localTest = security === 'auto' && !secure && !production() && host === '127.0.0.1' && process.env.SMTP_LOOPBACK_TEST === '1';
   const transport = nodemailer.createTransport({
     host, port, secure, requireTLS: !secure && !localTest, ignoreTLS: localTest,
     auth: user && pass ? { user, pass } : undefined,

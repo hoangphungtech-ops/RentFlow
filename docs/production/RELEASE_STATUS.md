@@ -1,19 +1,14 @@
-# Trạng thái phát hành RentFlow
+# RentFlow V8 — Trạng thái phát hành
 
 | Mốc | Trạng thái | Bằng chứng hoặc điều kiện còn thiếu |
 |---|---|---|
-| LOCAL_READY | PASS | MySQL 8.0.46, NestJS, Next.js, 5 migration, health 200, Auth 8/8, API 13/13, SMTP loopback, Edge và Docker smoke |
-| FINAL_DEMO_READY | PARTIAL | Luồng web local có kịch bản 10–12 phút. Cần nhóm diễn tập và xác nhận nghiệm thu trực tiếp. |
-| ONLINE_READY | BLOCKED | Chưa có VPS, domain, cấu hình DNS thật và quyền triển khai. Compose được kiểm tra riêng |
-| ANDROID_DEVICE_READY | BLOCKED | Có mã nguồn, typecheck, Android JS bundle. Chưa có SDK/adb và thiết bị để cài bản native. Cần staging HTTPS được cấp |
-| PLAY_BUILD_READY | BLOCKED | Target cấu hình 36, version 1.0.0 (1), chưa xác nhận application ID production, chưa có signing/APK/AAB |
-| PLAY_INTERNAL_TESTING | BLOCKED | Chưa có AAB ký, Play Console hoặc quyền tổ chức tester |
-| PLAY_CLOSED_TESTING | BLOCKED | Chưa xác định loại tài khoản và điều kiện closed testing thực áp dụng |
-| PLAY_PRODUCTION_APPROVED | BLOCKED | Chưa gửi duyệt |
-| PLAY_PUBLISHED | BLOCKED | Chưa có URL công khai của Google Play |
+| LOCAL_READY | PASS | Startup Windows, Docker clean-install, HTTPS loopback, MySQL 8 và đủ 5 migration. API 13/13, Auth 8/8, SMTP loopback 1/1, Edge 8/8 và RF14 persistence PASS. |
+| FINAL_DEMO_READY | PARTIAL | Có dữ liệu và checklist demo 10–12 phút. Nhóm cần diễn tập và ghi kết quả trực tiếp. |
+| ONLINE_READY | BLOCKED | Cần hạ tầng triển khai, domain/DNS, TLS công khai, cấu hình SMTP nhà cung cấp và hộp thư thử. |
+| ANDROID_DEVICE_READY | BLOCKED | Cần APK, điện thoại Android và staging HTTPS dùng chung với Web Admin để cài và đối chiếu luồng người thuê. |
+| PLAY_BUILD_READY | BLOCKED | Target API 36, cấu hình EAS APK/AAB đã kiểm tra. Cần application ID production đã duyệt, dự án EAS và quyền ký để tạo AAB. |
+| PLAY_PUBLISHED | BLOCKED | Cần Play Console, AAB ký, hoàn thành quy trình kiểm thử/xét duyệt áp dụng và URL công khai. |
 
-Runtime, công nợ và quyền đã chạy trên dữ liệu giả lập trong MySQL thật. Quyền riêng tư vẫn là dự thảo. Luồng xóa người thuê được kiểm thử API và CLI với tài khoản thử, việc duyệt quy định giữ dữ liệu và quy trình phản hồi có chủ sở hữu vẫn cần xác minh. Báo cáo thiết bị, Internet và Play tách riêng trong [Test Report](TEST_REPORT.md).
+Kết quả SMTP loopback và giao nhận qua nhà cung cấp được ghi riêng. CLI recovery là phương án vận hành hiện có. Nhóm ghi ngày, người tham gia và kết quả người dùng thử trong checklist. Cần phê duyệt chính sách riêng tư và thời gian lưu dữ liệu trước khi phát hành công khai.
 
-Bằng chứng tài khoản và hồi quy mới nhất trong [Test Report V6](../final-demo/TEST_REPORT_V6.md).
-
-[Báo cáo kiểm thử V7](../final-demo/TEST_REPORT_V7.md) và [checklist nghiệm thu](../final-demo/ACCEPTANCE_V7.md) ghi riêng kết quả SMTP, thiết bị và các bước release.
+[Báo cáo kiểm thử V8](../final-demo/TEST_REPORT_V8.md) · [Checklist nghiệm thu](../final-demo/ACCEPTANCE_V8.md) · [Android release](ANDROID_RELEASE.md) · [Security checklist](SECURITY_CHECKLIST.md)

@@ -1,17 +1,31 @@
 {
-  "cli": { "appVersionSource": "local" },
+  "cli": {
+    "appVersionSource": "local"
+  },
   "build": {
     "internal": {
       "distribution": "internal",
       "channel": "internal",
-      "env": { "RENTFLOW_RELEASE_BUILD": "1" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "RENTFLOW_RELEASE_BUILD": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "environment": "preview",
+      "credentialsSource": "remote"
     },
     "production": {
       "distribution": "store",
       "channel": "production",
-      "env": { "RENTFLOW_RELEASE_BUILD": "1" },
-      "android": { "buildType": "app-bundle" }
+      "env": {
+        "RENTFLOW_RELEASE_BUILD": "1"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "environment": "production",
+      "credentialsSource": "remote"
     }
   }
 }
