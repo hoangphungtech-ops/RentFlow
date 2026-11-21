@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "RentFlow",
+    "slug": "rentflow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["android"],
+    "android": { "package": "vn.rentflow.tenant" }
+  }
+}

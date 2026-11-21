@@ -25,6 +25,11 @@ model User {
   role      UserRoleStub @default(OWNER)
   createdAt DateTime     @default(now())
 
+  passwordHash String? @db.VarChar(150)
+  sessions Session[]
+  access PropertyAccess[]
+  tenantProfiles Tenant[]
+
   ownedProperties Property[]     @relation("PropertyOwner")
   recordedMeters  MeterReading[] @relation("MeterRecorder")
 }
@@ -50,6 +55,9 @@ model Lease {
 
   room     Room      @relation(fields: [roomId], references: [id])
   invoices Invoice[]
+  tenants LeaseTenant[]
+  handovers Handover[]
+  settlement Settlement?
 
   @@index([roomId, status])
 }
@@ -99,6 +107,8 @@ model Property {
   owner        User          @relation("PropertyOwner", fields: [ownerId], references: [id])
   rooms        Room[]
   utilityRates UtilityRate[]
+  access PropertyAccess[]
+  tenants Tenant[]
 
   @@index([ownerId])
 }
@@ -174,6 +184,7 @@ model Invoice {
 
   lease Lease         @relation(fields: [leaseId], references: [id])
   items InvoiceItem[]
+  payments Payment[]
 
   @@unique([leaseId, billingPeriod, activeFlag])
   @@index([status, dueDate])
@@ -186,6 +197,8 @@ model InvoiceItem {
   description       String          @db.VarChar(200)
   quantity          Decimal         @db.Decimal(10, 2)
   snapshotUnitPrice Decimal         @db.Decimal(12, 2)
+  meterStart Decimal? @db.Decimal(10, 2)
+  meterEnd Decimal? @db.Decimal(10, 2)
   lineTotal         Decimal         @db.Decimal(12, 2)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
@@ -205,4 +218,115 @@ model TrialLead {
   note      String?  @db.Text
   status    String   @default("NEW") @db.VarChar(30)
   createdAt DateTime @default(now())
+}model Session {
+  tokenHash String @id @db.Char(64)
+  userId String @db.Char(36)
+  expiresAt DateTime
+  user User @relation(fields: [userId], references: [id])
+  @@index([expiresAt])
+}
+
+model PropertyAccess {
+  propertyId String @db.Char(36)
+  userId String @db.Char(36)
+  property Property @relation(fields: [propertyId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  @@id([propertyId, userId])
+}
+
+model Tenant {
+  id String @id @default(uuid()) @db.Char(36)
+  propertyId String @db.Char(36)
+  userId String? @db.Char(36)
+  fullName String @db.VarChar(120)
+  contact String? @db.VarChar(120)
+  property Property @relation(fields: [propertyId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+  leases LeaseTenant[]
+  @@unique([propertyId, userId])
+}
+
+model LeaseTenant {
+  leaseId String @db.Char(36)
+  tenantId String @db.Char(36)
+  representative Boolean
+  lease Lease @relation(fields: [leaseId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  @@id([leaseId, tenantId])
+}
+
+enum HandoverKind {
+  IN
+  OUT
+}
+
+model Handover {
+  leaseId String @db.Char(36)
+  kind HandoverKind
+  date DateTime
+  condition String @db.VarChar(255)
+  inventory String @db.Text
+  electric Decimal @db.Decimal(10, 2)
+  water Decimal @db.Decimal(10, 2)
+  notes String? @db.Text
+  confirmedAt DateTime?
+  lease Lease @relation(fields: [leaseId], references: [id])
+  @@id([leaseId, kind])
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REVERSED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  DEPOSIT
+}
+
+model Payment {
+  id String @id @default(uuid()) @db.Char(36)
+  invoiceId String @db.Char(36)
+  requestKey String @db.Char(36)
+  amount Decimal @db.Decimal(12, 2)
+  method PaymentMethod
+  status PaymentStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  confirmedAt DateTime?
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  @@unique([invoiceId, requestKey])
+}
+
+model Settlement {
+  leaseId String @id @db.Char(36)
+  received Decimal @db.Decimal(12, 2)
+  deduction Decimal @db.Decimal(12, 2)
+  debtOffset Decimal @db.Decimal(12, 2)
+  refund Decimal @db.Decimal(12, 2)
+  reason String @db.VarChar(255)
+  invoiceId String? @db.Char(36)
+  confirmedBy String @db.Char(36)
+  createdAt DateTime @default(now())
+  lease Lease @relation(fields: [leaseId], references: [id])
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Char(36)
+  userId String @db.Char(36)
+  event String @db.VarChar(100)
+  message String @db.VarChar(255)
+  createdAt DateTime @default(now())
+  @@unique([userId, event])
+}
+
+model Audit {
+  id String @id @default(uuid()) @db.Char(36)
+  actorId String @db.Char(36)
+  action String @db.VarChar(50)
+  entityId String @db.Char(36)
+  reason String? @db.VarChar(255)
+  createdAt DateTime @default(now())
+  @@index([entityId])
 }

@@ -8,6 +8,7 @@ import {
   LeaseStatusStub,
 } from "@prisma/client";
 import Decimal from "decimal.js";
+import { passwordHash } from "../src/auth";
 
 const prisma = new PrismaClient();
 
@@ -78,11 +79,14 @@ async function main() {
     },
   ];
 
+  const password = process.env.DEMO_PASSWORD;
+  if (!password || password.length < 12) throw new Error("Configure DEMO_PASSWORD (minimum 12 characters)");
+  const hash = passwordHash(password);
   for (const u of users) {
     await prisma.user.upsert({
       where: { id: u.id },
-      update: { fullName: u.fullName, role: u.role },
-      create: u,
+      update: { passwordHash: hash },
+      create: { ...u, passwordHash: hash },
     });
   }
 
@@ -148,7 +152,7 @@ async function main() {
   for (const r of rooms) {
     await prisma.room.upsert({
       where: { id: r.id },
-      update: { status: r.status, maxOccupants: r.maxOccupants },
+      update: {},
       create: r,
     });
   }
@@ -187,7 +191,7 @@ async function main() {
   for (const rate of rates) {
     await prisma.utilityRate.upsert({
       where: { id: rate.id },
-      update: { unitPrice: rate.unitPrice },
+      update: {},
       create: rate,
     });
   }
@@ -243,7 +247,7 @@ async function main() {
       remainingAmount: totalAmount.toFixed(2),
       dueDate: new Date("2026-12-05T16:59:59.000Z"),
       status: InvoiceStatus.ISSUED,
-      issuedAt: new Date("2026-11-25T03:00:00.000Z"),
+      issuedAt: new Date("2026-11-20T03:00:00.000Z"),
       items: {
         create: [
           {
@@ -256,6 +260,7 @@ async function main() {
           {
             itemType: InvoiceItemType.ELECTRICITY,
             description: "Tien dien ky 2026-11 (220 - 100 = 120 kWh)",
+            meterStart: 100, meterEnd: 220,
             quantity: "120.00",
             snapshotUnitPrice: "3500.00",
             lineTotal: elecLine.toFixed(2),
@@ -263,6 +268,7 @@ async function main() {
           {
             itemType: InvoiceItemType.WATER,
             description: "Tien nuoc ky 2026-11 (25 - 20 = 5 m3)",
+            meterStart: 20, meterEnd: 25,
             quantity: "5.00",
             snapshotUnitPrice: "20000.00",
             lineTotal: waterLine.toFixed(2),
@@ -279,14 +285,90 @@ async function main() {
     },
   });
 
+  for (const userId of [IDS.STAFF_A, IDS.ACCOUNTANT_A]) {
+    await prisma.propertyAccess.upsert({ where: { propertyId_userId: { propertyId: IDS.PROP_A, userId } },
+      update: {}, create: { propertyId: IDS.PROP_A, userId } });
+  }
+  for (let n = 104; n <= 110; n++) {
+    const roomCode = "R" + n;
+    await prisma.room.upsert({ where: { propertyId_roomCode: { propertyId: IDS.PROP_A, roomCode } },
+      update: {}, create: { propertyId: IDS.PROP_A, roomCode, baseRentPrice: 2800000 } });
+  }
+  const representative = await prisma.tenant.upsert({
+    where: { propertyId_userId: { propertyId: IDS.PROP_A, userId: IDS.RENTER_A } },
+    update: {}, create: { propertyId: IDS.PROP_A, userId: IDS.RENTER_A, fullName: "Ng??i thu? m?u A" },
+  });
+  const companion = await prisma.tenant.upsert({
+    where: { id: "88888888-8888-4888-8888-888888888801" }, update: {},
+    create: { id: "88888888-8888-4888-8888-888888888801", propertyId: IDS.PROP_A, fullName: "Ng??i ? c?ng m?u" },
+  });
+  await prisma.leaseTenant.createMany({ data: [
+    { leaseId: IDS.LEASE_A, tenantId: representative.id, representative: true },
+    { leaseId: IDS.LEASE_A, tenantId: companion.id, representative: false },
+  ], skipDuplicates: true });
+  await prisma.handover.upsert({ where: { leaseId_kind: { leaseId: IDS.LEASE_A, kind: "IN" } },
+    update: {}, create: { leaseId: IDS.LEASE_A, kind: "IN", date: effectiveDate, confirmedAt: effectiveDate,
+      condition: "Ph?ng s?ch, thi?t b? ho?t ??ng", inventory: "M?t gi??ng, m?t qu?t", electric: 100, water: 20 } });
+  await prisma.$transaction(async tx => {
+    const invoiceId = IDS.INVOICE_A_2026_11;
+    const requestKey = "99999999-9999-4999-8999-999999999901";
+    const prior = await tx.payment.findUnique({ where: { invoiceId_requestKey: { invoiceId, requestKey } } });
+    if (prior) return;
+    await tx.payment.createMany({ data: [
+      { invoiceId, requestKey, amount: 2000000, method: "TRANSFER", status: "CONFIRMED", confirmedAt: new Date() },
+      { invoiceId, requestKey: "99999999-9999-4999-8999-999999999902", amount: 200000, method: "TRANSFER" },
+    ] });
+    await tx.invoice.update({ where: { id: invoiceId }, data: {
+      paidAmount: 2000000, remainingAmount: totalAmount.minus(2000000).toFixed(2), status: "PARTIALLY_PAID",
+    } });
+  });
+
+  await prisma.$transaction(async tx => {
+    const leaseId = "55555555-5555-4555-8555-555555555502";
+    if (await tx.lease.findUnique({ where: { id: leaseId } })) return;
+    const checkoutRoom = await tx.room.findUniqueOrThrow({
+      where: { propertyId_roomCode: { propertyId: IDS.PROP_A, roomCode: "R110" } },
+    });
+    const checkout = new Date("2026-11-15T00:00:00+07:00");
+    const invoiceId = "77777777-7777-4777-8777-777777777702";
+    const received = new Decimal(2000000);
+    const deduction = new Decimal(300000);
+    const debtOffset = new Decimal(500000);
+    await tx.lease.create({ data: {
+      id: leaseId, roomId: checkoutRoom.id, rentAmount: 500000, depositAgreed: received.toFixed(2),
+      depositReceived: received.toFixed(2), startDate: effectiveDate, endDate: checkout, status: "TERMINATED",
+      tenants: { create: { tenantId: representative.id, representative: true } },
+      handovers: { create: [
+        { kind: "IN", date: effectiveDate, confirmedAt: effectiveDate, condition: "Ph?ng nguy?n tr?ng", inventory: "M?t qu?t", electric: 0, water: 0 },
+        { kind: "OUT", date: checkout, confirmedAt: checkout, condition: "C?ng t?c qu?t c?n s?a", inventory: "M?t qu?t", electric: 0, water: 0 },
+      ] },
+      invoices: { create: {
+        id: invoiceId, billingPeriod: "2026-11", totalAmount: 500000, paidAmount: 500000, remainingAmount: 0,
+        dueDate: checkout, issuedAt: checkout, status: "PAID",
+        items: { create: { itemType: "RENT", description: "Ti?n thu? c?n l?i", quantity: 1, snapshotUnitPrice: 500000, lineTotal: 500000 } },
+        payments: { create: {
+          requestKey: "99999999-9999-4999-8999-999999999903", amount: debtOffset.toFixed(2), method: "DEPOSIT",
+          status: "CONFIRMED", confirmedAt: checkout,
+        } },
+      } },
+      settlement: { create: {
+        received: received.toFixed(2), deduction: deduction.toFixed(2), debtOffset: debtOffset.toFixed(2),
+        refund: received.minus(deduction).minus(debtOffset).toFixed(2), invoiceId, confirmedBy: IDS.OWNER_A,
+        reason: "S?a c?ng t?c qu?t theo bi?n b?n tr? ph?ng v? b? ti?n thu? c?n l?i", createdAt: checkout,
+      } },
+    } });
+    await tx.notification.create({ data: { userId: IDS.RENTER_A, event: "settlement:" + leaseId, message: "?? ch?t quy?t to?n c?c ph?ng R110" } });
+  });
+
   console.log(
     `Seed hoan tat! Tong hoa don mau R101 ky 2026-11 = ${totalAmount.toFixed(0)} VND`,
   );
 }
 
 main()
-  .catch((e) => {
-    console.error("Loi khi chay seed:", e);
+  .catch((error: unknown) => {
+    const code = error && typeof error === "object" && "code" in error ? error.code : "configuration";
+    console.error("Seed failed. Check demo configuration and migration status.", code);
     process.exit(1);
   })
   .finally(async () => {
