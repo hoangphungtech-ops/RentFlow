@@ -37,6 +37,7 @@ export function AdminForms({ overview, tab, current, write }: { overview: Overvi
   if (tab === 'Điện nước' && operations) return <div className="forms">
     {owner && <Action title="Thêm đơn giá" fields={[property, select('serviceType','Loại',[['ELECTRICITY','Điện'],['WATER','Nước'],['SERVICE','Dịch vụ']]), field('serviceName','Tên đơn giá'), field('unit','Đơn vị'), n('unitPrice','Đơn giá (đ)'), d('effectiveFrom','Hiệu lực từ')]} submit={scoped('properties', propertyField, '/rates')} />}
     <Action title="Ghi chỉ số" fields={[rooms, { ...field('billingPeriod','Kỳ (YYYY-MM)'), pattern: '20[0-9]{2}-(0[1-9]|1[0-2])' }, n('electricOld','Điện đầu kỳ'), n('electricNew','Điện cuối kỳ'), n('waterOld','Nước đầu kỳ'), n('waterNew','Nước cuối kỳ')]} submit={scoped('rooms', 'roomId', '/readings')} />
+    <Action title="Điều chỉnh chỉ số" fields={[rooms, { ...field('billingPeriod','Kỳ (YYYY-MM)'), pattern: '20[0-9]{2}-(0[1-9]|1[0-2])' }, n('electricOld','Điện đầu kỳ'), n('electricNew','Điện cuối kỳ'), n('waterOld','Nước đầu kỳ'), n('waterNew','Nước cuối kỳ'), field('reason','Lý do điều chỉnh')]} submit={scoped('rooms', 'roomId', '/readings/correct')} />
   </div>
   if (tab === 'Hóa đơn & thanh toán' && billing) return <Action title="Phát hành hóa đơn" fields={[leaseOptions(active), { ...field('billingPeriod','Kỳ (YYYY-MM)'), pattern: '20[0-9]{2}-(0[1-9]|1[0-2])' }, d('dueDate','Hạn thanh toán')]} submit={scoped('leases', leaseField, '/invoices')} />
   if (tab === 'Tiền cọc' && owner) return <div className="forms">
