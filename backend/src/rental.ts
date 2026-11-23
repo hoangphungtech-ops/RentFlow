@@ -381,4 +381,53 @@ export class RentalController {
       return row;
     });
   }
+
+  @Post('rooms/:roomId/readings/correct')
+  async correctReading(@Req() { actor }: SessionRequest, @Param('roomId') roomId: string, @Body() body: unknown) {
+    allow(actor, 'OWNER', 'STAFF');
+    const data = parse(z.object({
+      billingPeriod: period, electricOld: meter, electricNew: meter, waterOld: meter, waterNew: meter, reason: label(255),
+    }), body);
+    requireCondition(data.electricOld <= data.electricNew && data.waterOld <= data.waterNew, 'Chỉ số cuối phải từ chỉ số đầu trở lên');
+    return atomic(async tx => {
+      found(await tx.room.findFirst({ where: { id: roomId, property: propertyScope(actor) } }));
+      const existing = found(await tx.meterReading.findUnique({ where: { roomId_billingPeriod: { roomId, billingPeriod: data.billingPeriod } } }));
+      const activeInvoice = await tx.invoice.findFirst({
+        where: { lease: { roomId }, billingPeriod: data.billingPeriod, status: { not: 'CANCELLED' } },
+        select: { id: true },
+      });
+      requireCondition(!activeInvoice, 'Không thể sửa chỉ số khi kỳ này đã có hóa đơn đang hiệu lực; hãy hủy hóa đơn trước');
+      const updated = await tx.meterReading.update({
+        where: { id: existing.id },
+        data: {
+          electricOld: data.electricOld, electricNew: data.electricNew,
+          waterOld: data.waterOld, waterNew: data.waterNew,
+          recordedById: actor.id,
+        },
+      });
+      await audit(tx, actor, 'METER_CORRECTED', updated.id, data.reason);
+      return updated;
+    });
+  }
+
+  @Post('invoices/:invoiceId/cancel')
+  async cancelInvoice(@Req() { actor }: SessionRequest, @Param('invoiceId') invoiceId: string, @Body() body: unknown) {
+    allow(actor, 'OWNER', 'ACCOUNTANT');
+    const { reason } = parse(z.object({ reason: label(255) }), body);
+    return atomic(async tx => {
+      const invoice = found(await tx.invoice.findFirst({
+        where: { id: invoiceId, lease: leaseScope(actor) },
+        include: { payments: { where: { status: { in: ['PENDING', 'CONFIRMED'] } }, select: { id: true } } },
+      }));
+      requireCondition(invoice.status === 'ISSUED', 'Chỉ được hủy hóa đơn đang phát hành chưa thu tiền');
+      requireCondition(invoice.paidAmount.isZero() && invoice.payments.length === 0, 'Hóa đơn đã có khoản thanh toán đang chờ hoặc đã xác nhận');
+      const cancelled = await tx.invoice.update({
+        where: { id: invoice.id },
+        data: { status: 'CANCELLED', activeFlag: null, cancelledAt: new Date(), cancelReason: reason },
+      });
+      await audit(tx, actor, 'INVOICE_CANCELLED', invoice.id, reason);
+      await notify(tx, invoice.leaseId, 'invoice-cancel:' + invoice.id, 'Hóa đơn kỳ ' + invoice.billingPeriod + ' đã được hủy để lập lại');
+      return cancelled;
+    });
+  }
 }

@@ -25,7 +25,7 @@ export type Overview = {
 }
 export type Write = (path: string, body: Record<string, unknown>) => Promise<void>
 const date = (value: string) => new Date(value).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-const labels: Record<string, string> = { AVAILABLE: 'Trống', OCCUPIED: 'Đang thuê', MAINTENANCE: 'Bảo trì', ACTIVE: 'Đang thuê', DRAFT: 'Nháp', EXPIRED: 'Hết hạn', TERMINATED: 'Đã trả phòng', CASH: 'Tiền mặt', TRANSFER: 'Chuyển khoản', DEPOSIT: 'Bù cọc', PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', REVERSED: 'Đã đảo' }
+const labels: Record<string, string> = { AVAILABLE: 'Trống', OCCUPIED: 'Đang thuê', MAINTENANCE: 'Bảo trì', ACTIVE: 'Đang thuê', DRAFT: 'Nháp', EXPIRED: 'Hết hạn', TERMINATED: 'Đã trả phòng', CASH: 'Tiền mặt', TRANSFER: 'Chuyển khoản', DEPOSIT: 'Bù cọc', PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', REVERSED: 'Đã đảo', ISSUED: 'Chưa thu', PARTIALLY_PAID: 'Thu một phần', PAID: 'Đã thu đủ', CANCELLED: 'Đã hủy' }
 
 export default function Dashboard() {
   const [signedIn, setSignedIn] = useState(false)
@@ -38,6 +38,8 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const paymentRequest = useRef(new Map<string, string>())
+  const ledgerRef = useRef<HTMLElement>(null)
+  const shouldScroll = useRef(false)
   async function refresh() {
     setBusy(true)
     try {
@@ -55,7 +57,14 @@ export default function Dashboard() {
     sessionStorage.removeItem('rentflow-session')
     void refresh()
   }, [])
-  async function open(id: string) {
+  useEffect(() => {
+    if (ledger && shouldScroll.current) {
+      shouldScroll.current = false
+      ledgerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [ledger])
+  async function open(id: string, jump = false) {
+    shouldScroll.current = jump
     setLedger(undefined); setCurrent(id); setBusy(true); setError('')
     try { setLedger(await api<Ledger>('leases/' + id + '/ledger', token)) }
     catch (error) { setError((error as Error).message) }
@@ -117,14 +126,14 @@ export default function Dashboard() {
         {['Tổng quan', 'Hóa đơn & thanh toán'].includes(tab) && <section><h2>Hóa đơn còn nợ</h2>
           {unpaid.length ? unpaid.map(invoice => {
             const lease = overview.leases.find(row => row.id === invoice.leaseId)
-            return <p key={invoice.id}>{lease?.room.roomCode} · {lease?.tenants.find(row => row.representative)?.tenant.fullName} · {invoice.billingPeriod} · {vnd(invoice.remainingAmount)} · hạn {date(invoice.dueDate)}</p>
+            return <div key={invoice.id} className="unpaid-row"><span>{lease?.room.roomCode} · {lease?.tenants.find(row => row.representative)?.tenant.fullName} · {invoice.billingPeriod} · <strong>{vnd(invoice.remainingAmount)}</strong> · hạn {date(invoice.dueDate)}</span><button type="button" className="ghost no-print" onClick={() => open(invoice.leaseId, true)}>Xem sổ</button></div>
           }) : <p>Không có khoản còn nợ.</p>}
         </section>}
         {['Tổng quan', 'Hợp đồng', 'Hóa đơn & thanh toán', 'Tiền cọc'].includes(tab) && <section>
           <h2>Sổ đối chiếu thuê trọ</h2>
           {overview.leases.length ? overview.leases.map(lease => <button className="ghost choose" key={lease.id} onClick={() => open(lease.id)}>{lease.room.roomCode} · {labels[lease.status]} · {date(lease.startDate)}</button>) : <p>Chưa có hợp đồng.</p>}
         </section>}
-        {ledger && <section className="card">
+        {ledger && <section ref={ledgerRef} className="card print-ledger">
           <h2>Phòng {ledger.room.roomCode}</h2><p>{date(ledger.startDate)} – {date(ledger.endDate)} · {vnd(ledger.rentAmount)}/tháng</p>
           {ledger.tenants.map(({ tenant, representative }, i) => <p key={i}>{tenant.fullName}{representative ? ' · Đại diện' : ''}</p>)}
           {ledger.handovers.map(row => <div key={row.kind}><h3>{row.kind === 'IN' ? 'Nhận phòng' : 'Trả phòng'} · {date(row.date)}</h3>
@@ -140,10 +149,10 @@ export default function Dashboard() {
               <strong>Hoàn cọc {vnd(ledger.settlement.refund)}</strong></> : <p>Chưa chốt quyết toán.</p>}
           </details>
           {ledger.invoices.map(invoice => <article className="invoice" key={invoice.id}>
-            <h3>Hóa đơn {invoice.billingPeriod}</h3>
+            <div className="invoice-head"><h3>Hóa đơn {invoice.billingPeriod} <span className={'badge badge-' + invoice.status.toLowerCase()}>{labels[invoice.status] ?? invoice.status}</span></h3><button type="button" className="ghost no-print" onClick={() => window.print()}>In / Lưu PDF</button></div>
             <p>Tổng {vnd(invoice.totalAmount)} · Đã thu {vnd(invoice.paidAmount)} · Còn nợ {vnd(invoice.remainingAmount)}</p>
             <details><summary>Xem cách tính</summary>
-              {invoice.items.map(item => <p key={item.id}>{item.description} · {item.meterStart !== null ? '(' + item.meterEnd + ' − ' + item.meterStart + ') = ' : ''}{item.quantity} × {vnd(item.snapshotUnitPrice)} = <strong>{vnd(item.lineTotal)}</strong></p>)}
+              <div className="table-wrap"><table className="invoice-table"><thead><tr><th>Khoản mục</th><th>Chỉ số</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>{invoice.items.map(item => <tr key={item.id}><td>{item.description}</td><td>{item.meterStart !== null ? item.meterEnd + ' − ' + item.meterStart : '—'}</td><td>{item.quantity}</td><td>{vnd(item.snapshotUnitPrice)}</td><td><strong>{vnd(item.lineTotal)}</strong></td></tr>)}</tbody></table></div>
               <h4>Lịch sử thanh toán</h4>
               {invoice.payments.map(payment => <div key={payment.id}><p>{labels[payment.method]} · {vnd(payment.amount)} · {labels[payment.status]}</p>
                 {['OWNER', 'ACCOUNTANT'].includes(role ?? '') && payment.method !== 'DEPOSIT' && payment.status === 'PENDING' && <Action title="Xác nhận khoản thu" submit={values => write('payments/' + payment.id + '/confirm', values)} />}
@@ -157,6 +166,7 @@ export default function Dashboard() {
               await write('invoices/' + invoice.id + '/payments', { ...values, requestKey })
               paymentRequest.current.delete(key)
             }} />}
+          {['OWNER', 'ACCOUNTANT'].includes(role ?? '') && invoice.status === 'ISSUED' && Number(invoice.paidAmount) === 0 && !invoice.payments.some(p => p.status === 'PENDING' || p.status === 'CONFIRMED') && <div className="no-print"><Action title="Hủy hóa đơn" fields={[field('reason', 'Lý do hủy hóa đơn')]} submit={values => write('invoices/' + invoice.id + '/cancel', values)} /></div>}
           </article>)}
         </section>}
         {!renter && <AdminForms overview={overview} tab={tab} write={write} current={ledger?.id} />}
