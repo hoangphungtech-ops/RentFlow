@@ -2,7 +2,10 @@ const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
+const { access, readFile } = require('node:fs/promises');
+const { resolve } = require('node:path');
 const { PrismaClient } = require('@prisma/client');
+const sharp = require('sharp');
 
 const db = new PrismaClient();
 const base = process.env.RENTFLOW_TEST_ORIGIN ?? 'http://127.0.0.1:3000';
@@ -13,9 +16,9 @@ const mintedSessions = [];
 const unique = randomUUID().slice(0, 8);
 
 async function api(path, options = {}) {
-  const { token, data, expected = data ? 201 : 200 } = options;
+  const { token, data, method = data ? 'POST' : 'GET', expected = data ? 201 : 200 } = options;
   const res = await fetch(base + '/api/' + path, {
-    method: data ? 'POST' : 'GET',
+    method,
     headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(data ? { 'Content-Type': 'application/json' } : {}) },
     body: data && JSON.stringify(data),
     signal: AbortSignal.timeout(15000),
@@ -29,6 +32,18 @@ async function login(name) {
   const { token } = await api('login', { data: { email: name + '@rentflow.test', password }, expected: 200 });
   mintedSessions.push(token);
   return token;
+}
+async function upload(token, path, buffer, mime = 'image/png', method = 'POST') {
+  const form = new FormData();
+  form.append('image', new Blob([buffer], { type: mime }), 'room.png');
+  const response = await fetch(base + '/api/' + path, {
+    method,
+    headers: { Authorization: 'Bearer ' + token },
+    body: form,
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await response.json();
+  return { response, data };
 }
 const post = (token, path, data = {}, expected = 201) => api(path, { token, data, expected });
 const ledger = (token, id = seededLeaseId, expected = 200) => api('leases/' + id + '/ledger', { token, expected });
@@ -81,7 +96,64 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     assert.deepEqual([electric.meterStart, electric.meterEnd, electric.snapshotUnitPrice], ['100','220','3500']);
   });
   const room = await post(owner, 'properties/' + property.id + '/rooms', { roomCode: 'TEST-' + unique, baseRentPrice: 3000000, maxOccupants: 1 });
+  await t.test('RF21 room images validate, optimize, scope, replace and preserve one primary', async () => {
+    const png = await sharp({ create: { width: 2200, height: 1400, channels: 3, background: '#186e55' } }).png().toBuffer();
+    const invalid = await upload(owner, 'rooms/' + room.id + '/images', Buffer.from('not an image'));
+    assert.equal(invalid.response.status, 400);
+    assert.equal(await db.roomImage.count({ where: { roomId: room.id } }), 0);
+
+    const firstUpload = await upload(owner, 'rooms/' + room.id + '/images', png);
+    assert.equal(firstUpload.response.status, 201, JSON.stringify(firstUpload.data));
+    const first = await db.roomImage.findUniqueOrThrow({ where: { id: firstUpload.data.id } });
+    assert.equal(first.isPrimary, true);
+    assert.equal(first.mimeType, 'image/webp');
+    assert(first.sizeBytes < png.byteLength && first.sizeBytes <= 2 * 1024 * 1024);
+    assert(first.width <= 1600 && first.height <= 1200);
+    const storedPath = resolve(process.env.UPLOAD_DIR || 'uploads', 'rooms', first.storageKey);
+    const stored = await readFile(storedPath);
+    assert.deepEqual([ (await sharp(stored).metadata()).format, (await sharp(stored).metadata()).width ], ['webp', first.width]);
+    await access(storedPath);
+
+    const secondUpload = await upload(owner, 'rooms/' + room.id + '/images', png);
+    assert.equal(secondUpload.response.status, 201);
+    assert.equal(secondUpload.data.isPrimary, false);
+    const list = await api('rooms/' + room.id + '/images', { token: owner });
+    assert.equal(list.length, 2);
+    await api('rooms/' + room.id + '/images', { token: outsider, expected: 404 });
+    await api('rooms/' + room.id + '/images/' + first.id + '/file', { token: outsider, expected: 404 });
+
+    await post(owner, 'rooms/' + room.id + '/images/' + secondUpload.data.id + '/primary');
+    const replacement = await upload(owner, 'rooms/' + room.id + '/images/' + secondUpload.data.id, png, 'image/png', 'PUT');
+    assert.equal(replacement.response.status, 200, JSON.stringify(replacement.data));
+    assert.equal(replacement.data.isPrimary, true);
+    const fileResponse = await fetch(base + '/api/rooms/' + room.id + '/images/' + secondUpload.data.id + '/file', {
+      headers: { Authorization: 'Bearer ' + owner },
+    });
+    assert.equal(fileResponse.status, 200);
+    assert.match(fileResponse.headers.get('content-type'), /image\/webp/);
+    assert.equal((await sharp(Buffer.from(await fileResponse.arrayBuffer())).metadata()).format, 'webp');
+
+    const deletedPrimary = await api('rooms/' + room.id + '/images/' + secondUpload.data.id, {
+      token: owner, expected: 200, method: 'DELETE',
+    });
+    assert.equal(deletedPrimary.deleted, true);
+    assert.equal(deletedPrimary.primaryImageId, first.id);
+    const deletedLast = await api('rooms/' + room.id + '/images/' + first.id, {
+      token: owner, expected: 200, method: 'DELETE',
+    });
+    assert.equal(deletedLast.primaryImageId, null);
+    assert.equal(await db.roomImage.count({ where: { roomId: room.id } }), 0);
+    await assert.rejects(access(storedPath));
+  });
   const tenant = await post(staff, 'properties/' + property.id + '/tenants', { fullName: 'Người thuê kiểm thử ' + unique });
+  await t.test('RF22 room status defaults to available and maintenance blocks lease creation', async () => {
+    assert.equal((await db.room.findUnique({ where: { id: room.id } })).status, 'AVAILABLE');
+    const maintenance = await post(owner, 'properties/' + property.id + '/rooms', { roomCode: 'MAINT-' + unique, baseRentPrice: 3000000, maxOccupants: 1, status: 'MAINTENANCE' });
+    assert.equal((await db.room.findUnique({ where: { id: maintenance.id } })).status, 'MAINTENANCE');
+    await post(owner, 'leases', { roomId: maintenance.id, representative: tenant.id, startDate: '2026-10-01', endDate: '2027-10-01', rentAmount: 3000000, depositAgreed: 0 }, 409);
+    await post(owner, 'rooms/' + maintenance.id + '/settings', { baseRentPrice: 3000000, maxOccupants: 1, status: 'AVAILABLE' });
+    assert.equal((await db.room.findUnique({ where: { id: maintenance.id } })).status, 'AVAILABLE');
+  });
   const leaseData = { roomId: room.id, representative: tenant.id, startDate: '2026-10-01', endDate: '2027-10-01', rentAmount: 3000000, depositAgreed: 2000000 };
   await t.test('RF05 occupancy capacity is enforced', async () => {
     await post(owner, 'leases', { ...leaseData, occupants: [overview.tenants.find(row => row.id !== tenant.id).id] }, 409);
@@ -100,6 +172,12 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     }
   });
   const activeLease = (await ledger(owner, lease.id)).status === 'ACTIVE' ? lease : competingLease;
+  assert.equal((await db.room.findUnique({ where: { id: room.id } })).status, 'OCCUPIED');
+  await t.test('RF23 active lease prevents manual room status change', async () => {
+    await post(owner, 'rooms/' + room.id + '/settings', { baseRentPrice: 3000000, maxOccupants: 1, status: 'AVAILABLE' }, 409);
+    await post(owner, 'rooms/' + room.id + '/settings', { baseRentPrice: 3000000, maxOccupants: 1, status: 'MAINTENANCE' }, 409);
+    assert.equal((await db.room.findUnique({ where: { id: room.id } })).status, 'OCCUPIED');
+  });
   const prefix = 'leases/' + activeLease.id;
   const entry = { kind: 'IN', date: '2026-10-01', condition: 'Bàn giao thử', inventory: 'Quạt', electric: 100, water: 20 };
   await post(staff, prefix + '/handovers', entry);
@@ -160,6 +238,7 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     await post(owner, prefix + '/settlement', input, 409);
     const final = await ledger(owner, activeLease.id);
     assert.equal(final.status, 'TERMINATED');
+    assert.equal((await db.room.findUnique({ where: { id: room.id } })).status, 'AVAILABLE');
     assert.equal(final.invoices[0].remainingAmount, '1120000');
     assert.equal(final.invoices[0].payments.filter(row => row.method === 'DEPOSIT').length, 1);
     const updated = await api('overview', { token: owner });

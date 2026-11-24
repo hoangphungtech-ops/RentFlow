@@ -23,9 +23,9 @@ function Read-DemoData {
     } finally { Pop-Location }
 }
 $before = Read-DemoData
-docker compose -p rentflow-demo restart mysql
+docker compose -p rentflow-v9-demo restart mysql
 if ($LASTEXITCODE -ne 0) { throw 'Could not restart demo MySQL' }
-docker compose -p rentflow-demo up -d --wait mysql
+docker compose -p rentflow-v9-demo up -d --wait mysql
 if ($LASTEXITCODE -ne 0) { throw 'Demo MySQL did not become healthy' }
 $after = Read-DemoData
 if ($before -cne $after) { throw 'Demo records changed after MySQL restart' }

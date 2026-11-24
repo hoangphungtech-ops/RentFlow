@@ -53,7 +53,10 @@ def main():
     env.update(MYSQL_ROOT_PASSWORD=root_password, DEMO_PASSWORD=demo_password, DEMO_ADMIN_PASSWORD=admin_password,
                DEMO_ADMIN_EMAIL="testadmin@rentflow.test", PUBLIC_ORIGIN="", NODE_ENV="development",
                TRUST_PROXY_HOPS="0", API_HOST="127.0.0.1", NEXT_TELEMETRY_DISABLED="1")
-    tracked = subprocess.check_output(["git", "ls-files", "-z", "--", "backend", "web"], cwd=ROOT).decode()
+    tracked = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "backend", "web"],
+        cwd=ROOT,
+    ).decode()
     with tempfile.TemporaryDirectory(prefix="rentflow-release-candidate-") as directory:
         work = Path(directory)
         for file in filter(None, tracked.split("\0")):
@@ -95,8 +98,9 @@ def main():
             run("web", NPM, "run", "build")
             services.append(subprocess.Popen(["node", "dist/src/main.js"], cwd=work / "backend", env=env))
             wait_for_probe(lambda: ready(env["RENTFLOW_API_ORIGIN"] + "/api/health"), services)
-            services.append(subprocess.Popen(["node", "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", str(web_port)],
-                                             cwd=work / "web", env={**env, "NODE_ENV": "production"}))
+            web_env = {**env, "NODE_ENV": "production", "PORT": str(web_port), "HOSTNAME": "127.0.0.1"}
+            services.append(subprocess.Popen(["node", "-e", "require('./.next/standalone/server.js')"],
+                                             cwd=work / "web", env=web_env))
             wait_for_probe(lambda: ready(env["RENTFLOW_TEST_ORIGIN"] + "/api/health"), services)
             for suite in ["test", "test:accounts", "test:smtp"]:
                 run("backend", NPM, "run", suite)

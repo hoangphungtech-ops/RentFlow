@@ -2,6 +2,31 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright-core');
 const { randomUUID } = require('node:crypto');
+const { deflateSync } = require('node:zlib');
+
+function pngPixel(r = 24, g = 110, b = 85) {
+  const crc32 = buffer => {
+    let crc = 0xffffffff;
+    for (const byte of buffer) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const name = Buffer.from(type);
+    const length = Buffer.alloc(4); length.writeUInt32BE(data.length);
+    const checksum = Buffer.alloc(4); checksum.writeUInt32BE(crc32(Buffer.concat([name, data])));
+    return Buffer.concat([length, name, data, checksum]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(1, 0); header.writeUInt32BE(1, 4);
+  header[8] = 8; header[9] = 2;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.from([0, r, g, b]))), chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 const base = process.env.RENTFLOW_TEST_ORIGIN ?? 'http://127.0.0.1:3000';
 const password = process.env.DEMO_PASSWORD;
@@ -157,6 +182,33 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
         await login(page, 'owner.a');
         await navigate('Khu trọ & phòng');
         const room = await action(page, 'Tạo phòng', { propertyId: khu, roomCode: tag, baseRentPrice: '3000000', maxOccupants: '1', status: 'AVAILABLE' }, 'properties/' + khu + '/rooms');
+        const png = pngPixel();
+        const addPhoto = async () => {
+          const response = page.waitForResponse(res => res.url().endsWith('/api/rooms/' + room.id + '/images') && res.request().method() === 'POST');
+          await page.getByLabel('Thêm ảnh phòng ' + tag).setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: png });
+          const result = await response;
+          const body = await result.json();
+          assert.equal(result.status(), 201, JSON.stringify(body));
+          return body;
+        };
+        const firstPhoto = await addPhoto();
+        if (process.env.RENTFLOW_ROOM_CAPTURE) {
+          await page.locator('[data-room-image-id="' + firstPhoto.id + '"]').screenshot({ path: process.env.RENTFLOW_ROOM_CAPTURE });
+        }
+        await page.getByRole('img', { name: 'Ảnh phòng ' + tag }).waitFor();
+        const secondPhoto = await addPhoto();
+        const secondCard = page.locator('[data-room-image-id="' + secondPhoto.id + '"]');
+        await secondCard.getByRole('button', { name: 'Đặt ảnh đại diện' }).click();
+        await page.getByRole('status').getByText('Đã chọn ảnh đại diện.').waitFor();
+        const firstCard = page.locator('[data-room-image-id="' + firstPhoto.id + '"]');
+        const replaceResponse = page.waitForResponse(res => res.url().endsWith('/api/rooms/' + room.id + '/images/' + firstPhoto.id) && res.request().method() === 'PUT');
+        await firstCard.getByLabel('Thay ảnh phòng ' + tag).setInputFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: png });
+        assert.equal((await replaceResponse).status(), 200);
+        page.once('dialog', dialog => dialog.accept());
+        const deleteSecond = page.waitForResponse(res => res.url().endsWith('/api/rooms/' + room.id + '/images/' + secondPhoto.id) && res.request().method() === 'DELETE');
+        await secondCard.getByRole('button', { name: 'Xóa ảnh' }).click();
+        assert.equal((await deleteSecond).status(), 200);
+        // Keep the replaced primary image as a visual sample in the persistent demo.
         await navigate('Người thuê');
         const tenant = await action(page, 'Thêm người thuê', { propertyId: khu, fullName: tag }, 'properties/' + khu + '/tenants');
         await navigate('Hợp đồng');

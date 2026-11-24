@@ -13,7 +13,7 @@ foreach ($file in @('.rentflow-api.pid','.rentflow-web.pid')) {
 }
 docker info --format '{{.ServerVersion}}'
 Assert-Success 'Docker Desktop engine check'
-docker compose -p rentflow-demo up -d --wait mysql
+docker compose -p rentflow-v9-demo up -d --wait mysql
 Assert-Success 'MySQL startup'
 if (!$SkipInstall) {
     npm.cmd --prefix backend ci --prefer-offline --no-fund --no-audit
@@ -39,7 +39,7 @@ Assert-Success 'Next.js build'
 $node = (Get-Command node.exe).Source
 $api = Start-Process -FilePath $node -ArgumentList '--env-file=.env','dist/src/main.js' -WorkingDirectory (Join-Path $root 'backend') -WindowStyle Hidden -PassThru
 $api.Id | Set-Content .rentflow-api.pid
-$web = Start-Process -FilePath $node -ArgumentList 'node_modules/next/dist/bin/next','start','--hostname','127.0.0.1' -WorkingDirectory (Join-Path $root 'web') -WindowStyle Hidden -PassThru
+$web = Start-Process -FilePath $node -ArgumentList 'run-standalone.cjs' -WorkingDirectory (Join-Path $root 'web') -WindowStyle Hidden -PassThru
 $web.Id | Set-Content .rentflow-web.pid
 & "$PSScriptRoot/health-check.ps1" -Attempts 15
 Write-Host 'Web http://127.0.0.1:3000 | Admin http://127.0.0.1:3000/quan-ly | Swagger http://127.0.0.1:3001/swagger'

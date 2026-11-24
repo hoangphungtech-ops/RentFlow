@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
-foreach ($entry in @(@{ file='.rentflow-api.pid'; marker='dist/src/main.js' }, @{ file='.rentflow-web.pid'; marker='node_modules/next/dist/bin/next' })) {
+foreach ($entry in @(@{ file='.rentflow-api.pid'; marker='dist/src/main.js' }, @{ file='.rentflow-web.pid'; marker='run-standalone.cjs' })) {
     if (!(Test-Path -LiteralPath $entry.file)) { continue }
     $processId = [int](Get-Content -LiteralPath $entry.file)
     $process = Get-CimInstance Win32_Process -Filter "ProcessId=$processId"
@@ -9,5 +9,5 @@ foreach ($entry in @(@{ file='.rentflow-api.pid'; marker='dist/src/main.js' }, @
     }
     Remove-Item -LiteralPath $entry.file
 }
-docker compose -p rentflow-demo stop mysql
+docker compose -p rentflow-v9-demo stop mysql
 if ($LASTEXITCODE -ne 0) { throw 'Docker could not stop MySQL.' }

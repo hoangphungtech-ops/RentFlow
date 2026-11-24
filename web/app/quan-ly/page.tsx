@@ -8,8 +8,9 @@ import { RoomList } from './rooms'
 import { AdminForms } from './forms'
 
 type Person = { id: string; fullName: string; propertyId: string }
-type Room = { id: string; roomCode: string; status: string; baseRentPrice: string; maxOccupants: number }
-type Lease = { id: string; roomId: string; room: { roomCode: string; propertyId: string }; rentAmount: string; startDate: string; endDate: string; status: string; depositAgreed: string; depositReceived: string; tenants: { representative: boolean; tenant: { fullName: string } }[] }
+type RoomImage = { id: string; alt: string; mimeType: string; sizeBytes: number; width: number; height: number; isPrimary: boolean }
+type Room = { id: string; roomCode: string; status: string; baseRentPrice: string; maxOccupants: number; occupantCount: number; activeLeaseCount: number; images: RoomImage[] }
+type Lease = { id: string; roomId: string; room: { roomCode: string; propertyId: string }; rentAmount: string; startDate: string; endDate: string; status: string; depositAgreed: string; depositReceived: string; tenants: { representative: boolean; tenant: { id: string; fullName: string } }[] }
 type Payment = { id: string; method: string; status: string; amount: string }
 type Item = { id: string; description: string; meterStart: string | null; meterEnd: string | null; quantity: string; snapshotUnitPrice: string; lineTotal: string }
 type Invoice = { id: string; leaseId: string; billingPeriod: string; dueDate: string; totalAmount: string; paidAmount: string; remainingAmount: string; status: string }
@@ -118,7 +119,7 @@ export default function Dashboard() {
           {overview.leases.filter(lease => lease.status === 'ACTIVE' && +new Date(lease.endDate) >= +now && +new Date(lease.endDate) - +now <= 30 * 86400000).map(lease =>
             <p key={lease.id}>{lease.room.roomCode} · {date(lease.endDate)}</p>)}
         </>}
-        {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} />}
+        {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} refresh={refresh} owner={role === 'OWNER'} />}
         {tab === 'Người thuê' && <ul>{overview.tenants.map(person => <li key={person.id}>{person.fullName}</li>)}</ul>}
         {tab === 'Điện nước' && overview.properties.map(property => <section key={property.id} className="card"><h2>{property.name}</h2>{property.utilityRates.map(rate =>
           <p key={rate.id}>{rate.serviceName} · {vnd(rate.unitPrice)}/{rate.unit} · {date(rate.effectiveFrom)}</p>)}</section>)}

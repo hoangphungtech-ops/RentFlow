@@ -19,6 +19,7 @@ RUN npm ci --omit=dev --omit=optional --no-audit --no-fund \
     && test ! -d node_modules/@prisma/config
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/dist ./dist
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
 ENV NODE_ENV=production API_HOST=0.0.0.0
 USER node
 EXPOSE 3001

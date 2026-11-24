@@ -137,6 +137,7 @@ model Room {
   property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   meterReadings MeterReading[]
   leases        Lease[]
+  images        RoomImage[]
 
   @@unique([propertyId, roomCode])
   @@index([propertyId, status])
@@ -174,6 +175,23 @@ model MeterReading {
   recordedBy User @relation("MeterRecorder", fields: [recordedById], references: [id])
 
   @@unique([roomId, billingPeriod])
+}
+
+model RoomImage {
+  id         String   @id @default(uuid()) @db.Char(36)
+  roomId     String   @db.Char(36)
+  storageKey String   @unique @db.VarChar(80)
+  mimeType   String   @default("image/webp") @db.VarChar(40)
+  sizeBytes  Int
+  width      Int
+  height     Int
+  alt        String   @db.VarChar(160)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, isPrimary, createdAt])
 }
 
 model Invoice {

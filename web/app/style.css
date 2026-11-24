@@ -38,6 +38,24 @@ details{border:1px solid var(--line);border-radius:.5rem;padding:.65rem;margin:.
 .invoice-table{width:100%;border-collapse:collapse;font-size:.92rem;min-width:460px}
 .invoice-table th,.invoice-table td{border:1px solid var(--line);padding:.45rem .55rem;text-align:left}
 .invoice-table th{background:var(--paper);font-weight:700}
+.room-gallery{margin:.75rem 0;padding:.75rem;border:1px solid var(--line);border-radius:.6rem;background:#fff}
+.room-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:.65rem}
+.room-image-card{min-width:0;margin:0;padding:.5rem;border:1px solid var(--line);border-radius:.5rem}
+.room-photo{display:block;width:100%;height:140px;object-fit:cover;border-radius:.35rem;background:var(--paper)}
+.room-photo-loading{display:grid;place-items:center;color:var(--muted);font-size:.88rem}
+.room-image-card figcaption{display:grid;gap:.35rem;margin-top:.4rem;font-size:.85rem}
+.room-preview{max-width:320px;margin:.5rem 0;padding:.5rem;border:1px dashed var(--green);border-radius:.5rem}
+.person-picker{min-width:0;margin:.5rem 0;padding:.75rem;border:1px solid var(--line);border-radius:.5rem}
+.person-picker legend{font-weight:700;padding:0 .25rem}
+.person-picker input[type=search],.person-picker input[type=checkbox]{width:auto;min-height:auto}
+.person-picker input[type=checkbox]{margin:0 .55rem 0 0;accent-color:var(--green)}
+.person-results,.selected-people{list-style:none;margin:.45rem 0;padding:0;max-height:12rem;overflow:auto}
+.person-results li,.selected-people li{padding:.35rem;border-bottom:1px solid var(--line)}
+.person-results label,.selected-people li{display:flex;align-items:center;gap:.5rem}
+.selected-people li{justify-content:space-between}
+.room-image-card button,.image-action{width:100%;margin:.2rem 0}
+.image-action{display:block;padding:.4rem .6rem;border:1px dashed #719184;border-radius:.45rem;color:var(--green);font-size:.9rem}
+.image-action input{font-size:.82rem}
 @media print{.mast,nav,.forms,.action,.choose,.no-print{display:none!important}body{background:#fff}.shell{max-width:100%;padding:0}.card,.invoice{border:none;padding:0;margin:.5rem 0}details{border:none;padding:0}}
 
 @media print{body:has(.print-ledger) :has(> .print-ledger)>:not(.print-ledger),body:has(.print-ledger) .shell>:not(.print-ledger):not(:has(.print-ledger)){display:none!important}.invoice{break-inside:avoid}}

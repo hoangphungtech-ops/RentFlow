@@ -52,13 +52,31 @@ export class RentalController {
     const scope = leaseScope(actor);
     if (actor.role === 'RENTER') await this.remindDue(actor.id);
     const [properties, leases, invoices, notifications] = await Promise.all([
-      db.property.findMany({ where: propertyScope(actor), include: { rooms: { orderBy: { roomCode: 'asc' } }, utilityRates: true } }),
+      db.property.findMany({ where: propertyScope(actor), include: {
+        rooms: { orderBy: { roomCode: 'asc' }, include: {
+          images: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+          leases: { where: { status: { in: ['ACTIVE', 'EXPIRED'] } }, select: {
+            tenants: { select: { tenantId: true } }, handovers: { select: { kind: true, confirmedAt: true } },
+          } },
+        } },
+        utilityRates: true,
+      } }),
       db.lease.findMany({ where: scope, include: { room: { select: { roomCode: true, propertyId: true } }, tenants: { include: { tenant: { select: { id: true, fullName: true } } } } }, orderBy: { createdAt: 'desc' } }),
       db.invoice.findMany({ where: { lease: scope, status: { notIn: ['CANCELLED', 'DRAFT'] } }, orderBy: { dueDate: 'asc' } }),
       db.notification.findMany({ where: { userId: actor.id }, orderBy: { createdAt: 'desc' }, take: 50 }),
     ]);
     const tenants = await db.tenant.findMany({ where: { property: propertyScope(actor) }, select: { id: true, propertyId: true, fullName: true } });
-    return { actor, properties, leases, invoices, notifications, tenants };
+    const roomProperties = properties.map(property => ({
+      ...property,
+      rooms: property.rooms.map(room => {
+        const lease = room.leases[0];
+        const movedIn = lease?.handovers.some(row => row.kind === 'IN' && row.confirmedAt);
+        const movedOut = lease?.handovers.some(row => row.kind === 'OUT' && row.confirmedAt);
+        const { leases: _leases, ...roomData } = room;
+        return { ...roomData, occupantCount: movedIn && !movedOut ? lease.tenants.length : 0, activeLeaseCount: room.leases.length };
+      }),
+    }));
+    return { actor, properties: roomProperties, leases, invoices, notifications, tenants };
   }
 
   private async remindDue(userId: string) {
@@ -174,8 +192,11 @@ export class RentalController {
     requireCondition(data.startDate < data.endDate && new Set(ids).size === ids.length, 'Ngày hợp đồng hoặc danh sách người ở không hợp lệ');
     return atomic(async tx => {
       const room = found(await tx.room.findFirst({ where: { id: roomId, property: propertyScope(actor) } }));
+      requireCondition(room.status === 'AVAILABLE', 'Chỉ lập hợp đồng cho phòng trống');
       requireCondition(ids.length <= room.maxOccupants, 'Vượt sức chứa phòng');
       const count = await tx.tenant.count({ where: { id: { in: ids }, propertyId: room.propertyId } });
+      const alreadyLeased = await tx.leaseTenant.count({ where: { tenantId: { in: ids }, lease: { status: { in: ['ACTIVE', 'EXPIRED'] } } } });
+      requireCondition(alreadyLeased === 0, 'Người thuê đã thuộc hợp đồng đang hiệu lực');
       requireCondition(count === ids.length, 'Người ở phải thuộc cùng khu trọ');
       const lease = await tx.lease.create({ data: { ...data, roomId, status: 'DRAFT', tenants: { create: ids.map(tenantId => ({ tenantId, representative: tenantId === representative })) } } });
       await audit(tx, actor, 'LEASE_CREATED', lease.id);

@@ -19,7 +19,7 @@ export async function api<T>(path: string, token = '', body?: object, method?: s
 }
 
 type Option = [string, string]
-export type Field = { key: string; label: string; type?: string; options?: Option[]; optional?: boolean; value?: string; multiple?: boolean; pattern?: string }
+export type Field = { key: string; label: string; type?: string; options?: Option[]; optional?: boolean; value?: string; multiple?: boolean; pattern?: string; placeholder?: string; step?: string }
 export const field = (key: string, label: string, type = 'text', optional = false): Field => ({ key, label, type, optional })
 export const select = (key: string, label: string, options: Option[], optional = false, multiple = false): Field => ({ key, label, options, optional, multiple })
 
@@ -54,11 +54,11 @@ export function Action({ title, fields = [], submit, button, extra }: {
   return <form onSubmit={send} className="action">
     <h3>{title}</h3>
     <div className="fields">{fields.map(item => <label key={item.key}>{item.label}
-      {item.options ? <select disabled={busy} name={item.key} defaultValue={item.multiple ? [] : ''} required={!item.optional} multiple={item.multiple}>
+      {item.options ? <select disabled={busy} name={item.key} defaultValue={item.multiple ? [] : item.value ?? ''} required={!item.optional} multiple={item.multiple}>
         {!item.multiple && <option value="">Chọn</option>}
         {item.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select> : <input disabled={busy} name={item.key} type={item.type} min={item.type === 'number' ? 0 : undefined}
-        step={item.type === 'number' ? 'any' : undefined} required={!item.optional} pattern={item.pattern} defaultValue={item.value} />}
+        step={item.step ?? (item.type === 'number' ? 'any' : undefined)} required={!item.optional} pattern={item.pattern} defaultValue={item.value} placeholder={item.placeholder} />}
     </label>)}</div>
     {extra}<button disabled={busy}>{busy ? 'Đang gửi…' : button ?? 'Lưu'}</button>
     {feedback && <p role={failed ? 'alert' : 'status'} className={failed ? 'error' : 'feedback'}>{feedback}</p>}
