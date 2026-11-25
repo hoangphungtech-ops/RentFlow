@@ -1,0 +1,81 @@
+name: rentflow-2511-demo
+
+# Bind the web to loopback and dedicate both volumes to these synthetic fixtures.
+# The bundled passwords are only for this isolated local demonstration.
+x-demo-database: &demo-database mysql://rentflow:RentFlow2511DemoDB@mysql:3306/rentflow
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: RentFlow2511DemoRoot
+      MYSQL_DATABASE: rentflow
+      MYSQL_USER: rentflow
+      MYSQL_PASSWORD: RentFlow2511DemoDB
+    volumes:
+      - mysql_demo_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol tcp -h 127.0.0.1 -u rentflow rentflow -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 4s
+      timeout: 4s
+      retries: 40
+
+  prepare:
+    image: rentflow-2511-backend:demo
+    build:
+      context: ./backend
+      target: build
+    environment:
+      DATABASE_URL: *demo-database
+      DEMO_PASSWORD: RentFlow2511Demo!
+    command:
+      - sh
+      - -ec
+      - |
+        ./node_modules/.bin/prisma migrate deploy
+        node dist/prisma/seed.js
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  api:
+    image: rentflow-2511-backend:demo
+    build:
+      context: ./backend
+      target: build
+    environment:
+      DATABASE_URL: *demo-database
+      API_HOST: 0.0.0.0
+      NODE_ENV: development
+      UPLOAD_DIR: /app/uploads
+    command: ["node", "dist/src/main.js"]
+    volumes:
+      - uploads_demo_data:/app/uploads
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exitCode=1}).catch(()=>{process.exitCode=1})"]
+      interval: 4s
+      timeout: 4s
+      retries: 25
+
+  web:
+    build:
+      context: ./web
+      args:
+        RENTFLOW_API_ORIGIN: http://api:3001
+    ports:
+      - "127.0.0.1:32511:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","node","-e","Promise.all(['/api/health','/demo/index.html'].map(p=>fetch('http://127.0.0.1:3000'+p))).then(rs=>{if(rs.some(r=>!r.ok))process.exitCode=1}).catch(()=>{process.exitCode=1})"]
+      interval: 4s
+      timeout: 5s
+      retries: 25
+
+volumes:
+  mysql_demo_data:
+  uploads_demo_data:

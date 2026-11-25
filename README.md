@@ -2,6 +2,16 @@
 
 RentFlow quản lý phòng trọ, người ở, hợp đồng, bàn giao, điện nước, hóa đơn, thanh toán và tiền cọc. Người thuê dùng cùng website trên điện thoại để xem Sổ đối chiếu thuê trọ.
 
+## Demo tổng hợp 25/11
+
+Mở Docker Desktop, sau đó chạy lệnh dưới đây từ thư mục RentFlow đã giải nén.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\RUN-RENTFLOW-25-11.ps1
+```
+
+Trang demo mở cổng ba vai trò, RentFlow V9 trên MySQL và bản minh họa điện nước, QR, bảo trì. [Hướng dẫn và minh chứng](docs/demo-25-11/README.md).
+
 ## Chạy demo trên Windows
 
 Cần Node.js 22 trở lên, npm và Docker Desktop với Linux engine. Tạo `.env` và `backend/.env` từ các file mẫu. Dùng mật khẩu riêng cho MySQL root, tài khoản ứng dụng và tài khoản demo. Xem cách cấu hình và vận hành trong [runbook](docs/final-demo/RUNBOOK.md).

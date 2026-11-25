@@ -3,7 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
+ARG RENTFLOW_API_ORIGIN=http://127.0.0.1:3001
+ENV NEXT_TELEMETRY_DISABLED=1 RENTFLOW_API_ORIGIN=${RENTFLOW_API_ORIGIN}
 RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
