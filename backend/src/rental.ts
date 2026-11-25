@@ -50,6 +50,7 @@ export class RentalController {
   @Get('overview')
   async overview(@Req() { actor }: SessionRequest) {
     const scope = leaseScope(actor);
+    const canSeeCancelled = actor.role === 'OWNER' || actor.role === 'ACCOUNTANT';
     if (actor.role === 'RENTER') await this.remindDue(actor.id);
     const [properties, leases, invoices, notifications] = await Promise.all([
       db.property.findMany({ where: propertyScope(actor), include: {
@@ -62,7 +63,11 @@ export class RentalController {
         utilityRates: true,
       } }),
       db.lease.findMany({ where: scope, include: { room: { select: { roomCode: true, propertyId: true } }, tenants: { include: { tenant: { select: { id: true, fullName: true } } } } }, orderBy: { createdAt: 'desc' } }),
-      db.invoice.findMany({ where: { lease: scope, status: { notIn: ['CANCELLED', 'DRAFT'] } }, orderBy: { dueDate: 'asc' } }),
+      db.invoice.findMany({
+        where: { lease: scope, status: { notIn: canSeeCancelled ? ['DRAFT'] : ['DRAFT', 'CANCELLED'] } },
+        include: { _count: { select: { payments: { where: { status: 'PENDING' } } } } },
+        orderBy: { dueDate: 'asc' },
+      }),
       db.notification.findMany({ where: { userId: actor.id }, orderBy: { createdAt: 'desc' }, take: 50 }),
     ]);
     const tenants = await db.tenant.findMany({ where: { property: propertyScope(actor) }, select: { id: true, propertyId: true, fullName: true } });
@@ -253,13 +258,14 @@ export class RentalController {
 
   @Get('leases/:leaseId/ledger')
   async ledger(@Req() { actor }: SessionRequest, @Param('leaseId') leaseId: string) {
+    const canSeeCancelled = actor.role === 'OWNER' || actor.role === 'ACCOUNTANT';
     return found(await db.lease.findFirst({
       where: { id: leaseId, ...leaseScope(actor) },
       include: {
         room: { select: { roomCode: true, property: { select: { name: true } } } },
         tenants: { select: { representative: true, tenant: { select: { fullName: true } } } },
         handovers: true, settlement: true,
-        invoices: { where: { status: { notIn: ['DRAFT', 'CANCELLED'] } }, include: { items: true, payments: true }, orderBy: { billingPeriod: 'desc' } },
+        invoices: { where: { status: { notIn: canSeeCancelled ? ['DRAFT'] : ['DRAFT', 'CANCELLED'] } }, include: { items: true, payments: true }, orderBy: [{ billingPeriod: 'desc' }, { createdAt: 'desc' }] },
       },
     }));
   }

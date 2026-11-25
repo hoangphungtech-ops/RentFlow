@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Action, field, select } from '../shared'
+import { matchesVietnameseSearch } from '../vietnamese-search'
 import type { Overview, Write } from './page'
 
 const n = (key: string, label: string) => field(key, label, 'number')
@@ -23,7 +24,7 @@ function LeaseCreateForm({ overview, write }: { overview: Overview; write: Write
   const [saved, setSaved] = useState(false)
   const room = rooms.find(row => row.id === roomId)
   const people = tenants.filter(person => person.propertyId === room?.propertyId && !activeTenantIds.has(person.id))
-  const matches = people.filter(person => person.fullName.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi')))
+  const matches = people.filter(person => matchesVietnameseSearch(person.fullName, query))
   const selectedNames = occupants.map(id => people.find(person => person.id === id)).filter(Boolean)
   function chooseRoom(value: string) { setRoomId(value); setRepresentative(''); setOccupants([]); setQuery('') }
   function togglePerson(id: string) { setOccupants(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]) }

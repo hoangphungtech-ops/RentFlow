@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('playwright-core');
 const { randomUUID } = require('node:crypto');
 const { deflateSync } = require('node:zlib');
+const { join } = require('node:path');
 
 function pngPixel(r = 24, g = 110, b = 85) {
   const crc32 = buffer => {
@@ -55,9 +56,10 @@ async function action(page, title, values, path) {
   return result.json();
 }
 
-test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', async t => {
+test('Browser | admin, renter at 360/768/1366px, trial form and offline recovery', async t => {
   assert.ok(password, 'Set DEMO_PASSWORD in backend/.env and seed demo fixtures');
-  const browser = await chromium.launch({ channel: 'msedge', headless: true });
+  const executablePath = process.env.RENTFLOW_BROWSER_EXECUTABLE;
+  const browser = await chromium.launch({ ...(executablePath ? { executablePath } : { channel: 'msedge' }), headless: true });
   try {
     for (const width of [360, 768, 1366]) {
       await t.test('RF15 | renter ledger at ' + width + 'px', async () => {
@@ -85,6 +87,18 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
       const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
       try {
         await login(page, 'owner.a');
+        const tasks = page.getByRole('region', { name: 'Việc cần xử lý' });
+        await tasks.getByRole('heading', { name: '1 khoản chờ xác nhận' }).waitFor();
+        await tasks.getByRole('button', { name: 'Đối chiếu' }).click();
+        await page.getByRole('heading', { name: 'Xác nhận khoản thu' }).waitFor();
+        await page.getByRole('button', { name: 'Tổng quan' }).click();
+        const evidence = process.env.RENTFLOW_BILLING_CAPTURE_DIR;
+        if (evidence) {
+          await page.setViewportSize({ width: 360, height: 900 });
+          await noOverflow(page);
+          await page.screenshot({ path: join(evidence, 'rentflow-dien-thoai.png') });
+          await page.setViewportSize({ width: 1366, height: 900 });
+        }
         await page.getByRole('button', { name: 'Khu trọ & phòng' }).click();
         await page.getByRole('heading', { name: 'Cập nhật phòng' }).waitFor();
         await page.getByLabel('Tìm phòng').fill('r103');
@@ -172,8 +186,9 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
       } finally { await page.close(); }
     });
 
-    await t.test('V7 business | Edge room, lease, meters, invoice, payment and checkout on MySQL', async () => {
+    await t.test('V9 business | room, meters, cancel, reissue, A4 PDF, payment and checkout on MySQL', async () => {
       const page = await browser.newPage({ viewport: { width: 768, height: 900 } });
+      await page.clock.setFixedTime(new Date('2026-11-25T12:00:00+07:00'));
       const tag = 'EDGE-' + randomUUID().slice(0,8);
       const khu = '22222222-2222-4222-8222-222222222201';
       const navigate = title => page.getByRole('button', { name: title, exact: true }).click();
@@ -212,7 +227,7 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
         await navigate('Người thuê');
         const tenant = await action(page, 'Thêm người thuê', { propertyId: khu, fullName: tag }, 'properties/' + khu + '/tenants');
         await navigate('Hợp đồng');
-        const lease = await action(page, 'Lập hợp đồng', { roomId: room.id, representative: tenant.id, startDate: '2026-10-01', endDate: '2027-10-01', rentAmount: '3000000', depositAgreed: '2000000' }, 'leases');
+        const lease = await action(page, 'Lập hợp đồng', { roomId: room.id, representative: tenant.id, startDate: '2026-10-01', endDate: '2026-12-15', rentAmount: '3000000', depositAgreed: '2000000' }, 'leases');
         const leasePath = 'leases/' + lease.id;
         await action(page, 'Kích hoạt hợp đồng', { leaseId: lease.id }, leasePath + '/activate');
         await action(page, 'Lập biên bản bàn giao', { leaseId: lease.id, kind: 'IN', date: '2026-10-01', condition: 'Bàn giao Edge', inventory: 'Quạt', electric: '100', water: '20' }, leasePath + '/handovers');
@@ -221,14 +236,66 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
         await navigate('Điện nước');
         await action(page, 'Ghi chỉ số', { roomId: room.id, billingPeriod: '2026-11', electricOld: '100', electricNew: '220', waterOld: '20', waterNew: '25' }, 'rooms/' + room.id + '/readings');
         await navigate('Hóa đơn & thanh toán');
-        const invoice = await action(page, 'Phát hành hóa đơn', { leaseId: lease.id, billingPeriod: '2026-11', dueDate: '2026-12-05' }, leasePath + '/invoices');
-        await showLease();
+        const input = { leaseId: lease.id, billingPeriod: '2026-11', dueDate: '2026-11-20' };
+        const original = await action(page, 'Phát hành hóa đơn', input, leasePath + '/invoices');
+        const table = page.getByRole('region', { name: 'Bảng kê hóa đơn' });
+        await table.getByRole('row').filter({ hasText: tag }).getByRole('button', { name: 'Xem sổ' }).click();
         await page.getByText(/Tổng 3\.620\.000/).waitFor();
+        const originalArticle = page.locator('#invoice-' + original.id);
+        await action(page, 'Hủy hóa đơn', { reason: 'Chỉnh chỉ số điện sau đối chiếu' }, 'invoices/' + original.id + '/cancel');
+        await originalArticle.getByText('Đã hủy', { exact: true }).waitFor();
+        await page.getByText('Đã hủy hóa đơn kỳ 2026-11.').waitFor();
+        await navigate('Điện nước');
+        await action(page, 'Điều chỉnh chỉ số', {
+          roomId: room.id, billingPeriod: '2026-11', electricOld: '100', electricNew: '225',
+          waterOld: '20', waterNew: '25', reason: 'Đọc lại công tơ',
+        }, 'rooms/' + room.id + '/readings/correct');
+        await page.getByText('Đã lưu.', { exact: true }).waitFor();
+        await navigate('Hóa đơn & thanh toán');
+        const invoice = await action(page, 'Phát hành hóa đơn', input, leasePath + '/invoices');
+        assert.notEqual(invoice.id, original.id);
+        const reissuedRow = table.getByRole('row').filter({ hasText: tag }).filter({ hasText: 'Chưa thu' });
+        await reissuedRow.getByRole('button', { name: 'Xem sổ' }).click();
+        const reissuedArticle = page.locator('#invoice-' + invoice.id);
+        await reissuedArticle.getByText(/Tổng 3\.637\.500/).waitFor();
+        await page.waitForFunction(id => {
+          const article = document.getElementById('invoice-' + id);
+          return article && Math.abs(article.getBoundingClientRect().top) < 25;
+        }, invoice.id);
+        const evidence = process.env.RENTFLOW_BILLING_CAPTURE_DIR;
+        if (evidence) await table.screenshot({ path: join(evidence, 'rentflow-bang-ke.png') });
+        await navigate('Tổng quan');
+        const tasks = page.getByRole('region', { name: 'Việc cần xử lý' });
+        const overdue = tasks.getByRole('heading', { name: '1 hóa đơn quá hạn' });
+        await overdue.waitFor();
+        await tasks.getByRole('heading', { name: '1 hợp đồng sắp hết hạn' }).waitFor();
+        if (evidence) {
+          await page.setViewportSize({ width: 1366, height: 1000 });
+          await page.evaluate(() => scrollTo(0, 0));
+          await page.screenshot({ path: join(evidence, 'rentflow-dieu-hanh.png') });
+          await page.setViewportSize({ width: 768, height: 900 });
+        }
+        await tasks.getByRole('button', { name: 'Xem hợp đồng' }).click();
+        await page.getByRole('heading', { name: 'Phòng ' + tag }).waitFor();
+        await tasks.getByRole('button', { name: 'Xem sổ' }).click();
+        await reissuedArticle.getByText(/Tổng 3\.637\.500/).waitFor();
+        await page.evaluate(() => { window.print = () => { window.__rentflowPrintInvoked = true; }; });
+        await reissuedArticle.getByRole('button', { name: 'In / Lưu PDF' }).click();
+        assert(await page.evaluate(() => window.__rentflowPrintInvoked));
+        await page.emulateMedia({ media: 'print' });
+        const print = page.locator('.print-invoice');
+        assert.match(await print.innerText(), /225 − 100/);
+        assert.doesNotMatch(await print.innerText(), /220 − 100/);
+        assert.equal(await page.getByRole('navigation').isVisible(), false);
+        assert.equal(await page.getByRole('main').isVisible(), false);
+        const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true, path: evidence && join(evidence, 'rentflow-hoa-don-a4.pdf') });
+        assert.equal([...pdf.toString('latin1').matchAll(/\/Type\s*\/Page\b/g)].length, 1);
+        await page.emulateMedia({ media: 'screen' });
         const payment = await action(page, 'Báo thanh toán', { amount: '2000000', method: 'TRANSFER' }, 'invoices/' + invoice.id + '/payments');
         await page.getByText(/Chuyển khoản · 2\.000\.000.*Chờ xác nhận/).waitFor({ state: 'attached' });
-        await page.getByText('Xem cách tính').click();
+        await reissuedArticle.getByText('Xem cách tính').click();
         await action(page, 'Xác nhận khoản thu', {}, 'payments/' + payment.id + '/confirm');
-        await page.getByText(/Còn nợ 1\.620\.000/).last().waitFor();
+        await reissuedArticle.getByText(/Còn nợ 1\.637\.500/).waitFor();
         await navigate('Tiền cọc');
         await action(page, 'Ghi cọc đã nhận', { leaseId: lease.id, amount: '2000000', reason: 'Bằng chứng nhận cọc Edge' }, leasePath + '/deposit');
         await navigate('Hợp đồng');
@@ -245,7 +312,7 @@ test('Edge | admin, renter at 360/768/1366px, trial form and offline recovery', 
         await page.getByLabel('Tìm phòng').fill(tag);
         await page.getByLabel('Trạng thái phòng', { exact: true }).selectOption('AVAILABLE');
         await page.getByText('Lịch sử phòng ' + tag).click();
-        await page.getByText(/2026-11 · Điện 100 → 220/).waitFor();
+        await page.getByText(/2026-11 · Điện 100 → 225/).waitFor();
         await page.getByRole('button', { name: /^Đã trả phòng ·/ }).click();
         await page.getByRole('heading', { name: 'Phòng ' + tag }).waitFor();
         await noOverflow(page);

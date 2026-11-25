@@ -209,6 +209,35 @@ test('RF01–RF20 | MySQL 8, API proxied by Next, role scope and rental-to-settl
     const snapshot = (await ledger(owner, priceLease.id)).invoices.find(row => row.id === fixed.id);
     assert.equal(snapshot.totalAmount, '3620000');
     assert.equal(snapshot.items.find(row => row.itemType === 'ELECTRICITY').snapshotUnitPrice, '3500');
+
+    const cancelPath = 'invoices/' + fixed.id + '/cancel';
+    const correctPath = 'rooms/' + priceRoom.id + '/readings/correct';
+    const reason = 'Nhập nhầm chỉ số điện';
+    const correction = { ...reading, electricNew: 225, reason };
+    await post(owner, cancelPath, { reason: ' ' }, 400);
+    await post(staff, cancelPath, { reason }, 403);
+    await post(otherOwner, cancelPath, { reason }, 404);
+    await post(owner, correctPath, correction, 409);
+    const cancelled = await post(owner, cancelPath, { reason });
+    assert.deepEqual([cancelled.status, cancelled.cancelReason], ['CANCELLED', reason]);
+    await post(otherOwner, correctPath, correction, 404);
+    await post(accountant, correctPath, correction, 403);
+    await post(owner, correctPath, { ...correction, waterNew: 19 }, 409);
+    const corrected = await post(owner, correctPath, correction);
+    const reissued = await post(owner, 'leases/' + priceLease.id + '/invoices', invoiceInput);
+    assert.notEqual(reissued.id, fixed.id);
+    const newElectric = reissued.items.find(row => row.itemType === 'ELECTRICITY');
+    assert.deepEqual([newElectric.meterEnd, newElectric.snapshotUnitPrice], ['225', '9000']);
+    const history = (await ledger(owner, priceLease.id)).invoices;
+    const original = history.find(row => row.id === fixed.id);
+    assert.equal(original.status, 'CANCELLED');
+    assert.deepEqual(original.items.find(row => row.itemType === 'ELECTRICITY'), snapshot.items.find(row => row.itemType === 'ELECTRICITY'));
+    const logs = await db.audit.findMany({
+      where: { OR: [{ entityId: fixed.id, action: 'INVOICE_CANCELLED' }, { entityId: corrected.id, action: 'METER_CORRECTED' }] },
+      select: { reason: true, actorId: true, action: true },
+      orderBy: { action: 'asc' },
+    });
+    assert.deepEqual(logs, ['INVOICE_CANCELLED', 'METER_CORRECTED'].map(action => ({ action, reason, actorId: overview.actor.id })));
   });
   const payPath = 'invoices/' + invoice.id + '/payments';
   const paymentData = { amount: 2000000, method: 'TRANSFER', requestKey: randomUUID() };

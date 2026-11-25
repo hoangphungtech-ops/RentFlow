@@ -28,6 +28,14 @@ Chỉ thêm `-Seed` khi khởi tạo một database demo mới cần dữ liệu
 
 Mật khẩu của tài khoản mẫu do người chạy đặt trong `DEMO_PASSWORD` tại `backend/.env`. Nếu dùng chung máy demo, chuyển mật khẩu qua kênh riêng.
 
+## Điều hành và đối chiếu hóa đơn
+
+- **Tổng quan** hiển thị công nợ, phòng trống, hóa đơn quá hạn, khoản chờ xác nhận và hợp đồng sắp hết hạn trong 30 ngày theo giờ Việt Nam. Chọn một mục để mở đúng hóa đơn hoặc hợp đồng.
+- **Hóa đơn & thanh toán** hiển thị tổng tiền, số đã thu, số còn nợ và trạng thái. Chủ trọ hoặc kế toán trong phạm vi khu có thể xem hóa đơn đã hủy. Hóa đơn đã hủy được giữ lại để đối chiếu và không tính vào công nợ.
+- Sau khi hủy hóa đơn chưa có khoản thu đang chờ hoặc đã xác nhận, người có quyền có thể điều chỉnh chỉ số điện nước kèm lý do rồi phát hành hóa đơn mới. **In / Lưu PDF** xuất riêng hóa đơn được chọn.
+
+[Xem ảnh giao diện và kết quả kiểm thử thực tế](docs/improvements/V9_3_RUNTIME.md).
+
 ## Bàn giao
 
 - [Tài khoản demo và quản lý truy cập V6](docs/final-demo/DEMO_ACCOUNTS.md)

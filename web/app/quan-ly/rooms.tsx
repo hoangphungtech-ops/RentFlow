@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { api, vnd } from '../shared'
+import { matchesVietnameseSearch } from '../vietnamese-search'
 import type { Overview } from './page'
 
 type History = {
@@ -50,7 +51,7 @@ export function RoomList({ properties, statuses, openLease, refresh, owner }: {
   const [status, setStatus] = useState('')
   const matches = properties.map(property => ({ ...property, rooms: property.rooms.filter(room =>
     (!status || room.status === status) &&
-    (room.roomCode + ' ' + property.name).toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
+    matchesVietnameseSearch(room.roomCode + ' ' + property.name, search),
   ) })).filter(property => property.rooms.length)
   return <>
     <label>Tìm phòng<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Mã phòng hoặc tên khu" /></label>
