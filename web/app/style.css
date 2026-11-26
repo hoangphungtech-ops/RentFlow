@@ -208,10 +208,21 @@ details{border:1px solid var(--line);border-radius:.5rem;padding:.65rem;margin:.
 
 .owner-workspace .owner-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .owner-panels { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: .9rem; margin: 1rem 0; }
-.owner-bars { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; min-height: 145px; gap: .5rem; padding: 0; list-style: none; }
+.owner-bars {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(38px, 1fr));
+  align-items: end;
+  min-height: 200px;
+  gap: .4rem;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
 .owner-bars li { min-width: 0; display: grid; justify-items: center; gap: .25rem; }
 .owner-bar { width: min(100%, 46px); min-height: 2px; background: #a6d8c5; border-radius: .25rem .25rem 0 0; }
-.owner-bars li:last-child .owner-bar { background: #167354; }
+.owner-bars .owner-bar.current-month {
+  background: #167354;
+}
 .owner-activity { padding: 0; list-style: none; }
 .owner-activity li { display: grid; gap: .15rem; padding: .45rem 0; border-bottom: 1px solid #e4ede8; }
 .renter-mobile-nav { display: none; }
@@ -228,3 +239,42 @@ details{border:1px solid var(--line);border-radius:.5rem;padding:.65rem;margin:.
 .renter-invoice-summary div { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
 .renter-invoice-summary h2, .renter-invoice-summary p { margin: .2rem 0 .5rem; color: white; }
 .renter-invoice-summary strong { font-size: 1.4rem; }
+.yearly-revenue {
+  padding: 15px 0;
+  margin-bottom: 10px;
+}
+
+.yearly-revenue p {
+  color: #60756d;
+  margin: 0 0 8px;
+}
+
+.yearly-revenue strong {
+  color: #106950;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+/* RentFlow revenue and admin photo upgrade */
+.owner-revenue-card { min-width: 0; }
+.revenue-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: .65rem; flex-wrap: wrap; }
+.revenue-heading h2 { margin: 0 0 .25rem; }
+.revenue-year-select { display: flex; align-items: center; gap: .4rem; font-size: .85rem; }
+.revenue-year-select select { width: auto; min-width: 112px; min-height: 36px; margin: 0; padding: .3rem .5rem; }
+.owner-revenue-card .yearly-revenue { padding: .6rem 0; margin: 0; }
+.owner-revenue-card .yearly-revenue p { margin: 0 0 .15rem; }
+.revenue-chart-scroll { overflow-x: auto; width: 100%; }
+.revenue-svg { display: block; width: 100%; min-width: 560px; height: auto; }
+
+.revenue-tick { font-size: 12px; fill: #526b61; }
+.revenue-column:hover rect { opacity: .75; }
+.revenue-legend { display: flex; flex-wrap: wrap; gap: .8rem; font-size: .8rem; color: #526b61; }
+.revenue-legend span { display: inline-flex; align-items: center; gap: .3rem; }
+.revenue-swatch { display: inline-block; width: .65rem; height: .65rem; background: #a6d8c5; border-radius: 2px; }
+.revenue-swatch.current { background: #167354; }
+.admin-room-photos { margin: .5rem 0 .9rem; }
+.admin-room-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.admin-room-actions .ghost { color: #a12828; border-color: #a12828; }
+.admin-photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: .75rem; margin-top: .7rem; }
+.admin-photo-grid img { display: block; width: 100%; height: 190px; object-fit: contain; background: #f2f6f4; border-radius: .5rem; }
+@media (max-width: 1150px) { .owner-panels { grid-template-columns: minmax(0, 1fr); } }
