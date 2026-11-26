@@ -14,7 +14,10 @@ PASS login via UI renter.a@rentflow.test user
 PASS login via UI renter.b@rentflow.test user
 PASS login via UI staff.a@rentflow.test staff
 PASS login via UI accountant.a@rentflow.test accountant
-PASS wrong dashboard denied for all 15 accounts
+PASS login via UI user.demo@rentflow.test user
+PASS login via UI manager.demo@rentflow.test owner
+PASS login via UI admin.demo@rentflow.test admin
+PASS wrong dashboard denied for all 18 accounts
 PASS isolated property lists, renter ledger overview, staff finance restriction and admin/manager API guards
 PASS renter lease isolation, maintenance assignment scope, staff progress and renter status
 PASS logout revokes session and mobile login fits 360px

@@ -1,3 +1,4 @@
+import { demoPassword } from './seed-demo-config';
 import {
   PrismaClient,
   RoomStatus,
@@ -79,8 +80,9 @@ async function main() {
     },
   ];
 
-  const password = process.env.DEMO_PASSWORD;
-  if (!password || password.length < 12) throw new Error("Configure DEMO_PASSWORD (minimum 12 characters)");
+  const isV10Demo = process.env.RENTFLOW_V10_DEMO === "1";
+  const password = isV10Demo ? demoPassword() : process.env.DEMO_PASSWORD;
+  if (!password || (!isV10Demo && password.length < 12)) throw new Error("Configure DEMO_PASSWORD (minimum 12 characters)");
   const hash = passwordHash(password);
   for (const u of users) {
     await prisma.user.upsert({

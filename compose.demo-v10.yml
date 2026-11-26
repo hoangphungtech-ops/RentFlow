@@ -25,7 +25,7 @@ services:
       target: build
     environment:
       DATABASE_URL: *demo-database
-      DEMO_PASSWORD: ${DEMO_PASSWORD:-RentFlow2511Demo!}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-Demo@2026!}
       RENTFLOW_V10_DEMO: "1"
       NODE_ENV: development
     command:
@@ -39,6 +39,7 @@ services:
         fi
         node dist/prisma/seed-v10.js
         node dist/prisma/seed-rbac.js
+        node dist/prisma/seed-rotate-demo-password.js
     volumes:
       - rentflow_v10_uploads:/app/uploads
     depends_on:

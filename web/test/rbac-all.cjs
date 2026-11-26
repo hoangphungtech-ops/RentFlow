@@ -14,6 +14,7 @@ const accounts = {
   'owner.a@rentflow.test': 'owner', 'owner.b@rentflow.test': 'owner',
   'renter.a@rentflow.test': 'user', 'renter.b@rentflow.test': 'user',
   'staff.a@rentflow.test': 'staff', 'accountant.a@rentflow.test': 'accountant',
+  'user.demo@rentflow.test': 'user', 'manager.demo@rentflow.test': 'owner', 'admin.demo@rentflow.test': 'admin',
 };
 
 async function main() {
@@ -53,7 +54,7 @@ async function main() {
       await page.getByRole('heading', { name: 'Không có quyền truy cập' }).waitFor({ timeout: 10000 });
       await page.close();
     }
-    console.log('PASS wrong dashboard denied for all 15 accounts');
+    console.log('PASS wrong dashboard denied for all ' + contexts.size + ' accounts');
     const api = (account) => contexts.get(account).request;
     async function overview(account) {
       const r = await api(account).get(origin + '/api/overview');

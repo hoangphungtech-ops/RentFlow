@@ -1,3 +1,4 @@
+import { demoPassword } from './seed-demo-config';
 import { randomUUID } from 'node:crypto';
 import { UserRoleStub } from '@prisma/client';
 import { db, passwordHash } from '../src/auth';
@@ -15,12 +16,7 @@ const accounts = [
 ] as const satisfies ReadonlyArray<readonly [string, UserRoleStub, string]>;
 
 async function seed() {
-  const url = new URL(process.env.DATABASE_URL ?? '');
-  const password = process.env.DEMO_PASSWORD;
-  if (process.env.RENTFLOW_V10_DEMO !== '1' || process.env.NODE_ENV === 'production' || process.env.PUBLIC_ORIGIN ||
-      !['mysql', 'localhost', '127.0.0.1'].includes(url.hostname) || url.pathname !== '/rentflow_v10_demo' || !password || password.length < 12) {
-    throw new Error('Chỉ seed RBAC trong cơ sở dữ liệu rentflow_v10_demo khi bật cờ demo.');
-  }
+  const password = demoPassword();
   await db.$transaction(async tx => {
     const ids = new Map<string, string>();
     for (const [username, role, fullName] of accounts) {

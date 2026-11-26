@@ -1,3 +1,4 @@
+import { demoPassword } from './seed-demo-config';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import sharp from 'sharp';
@@ -17,12 +18,7 @@ const ids = {
 };
 
 async function seed() {
-  const url = new URL(process.env.DATABASE_URL ?? '');
-  const pass = process.env.DEMO_PASSWORD;
-  if (process.env.RENTFLOW_V10_DEMO !== '1' || process.env.NODE_ENV === 'production' || process.env.PUBLIC_ORIGIN ||
-      !['mysql', '127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/rentflow_v10_demo' || !pass || pass.length < 12) {
-    throw new Error('V10 seed requires the dedicated rentflow_v10_demo database and demo flag.');
-  }
+  const pass = demoPassword();
   for (const [key, role, fullName] of [
     ['user', 'RENTER', 'Khách thuê demo'], ['admin', 'ADMIN', 'Quản trị viên demo'], ['manager', 'OWNER', 'Chủ trọ demo'],
   ] as const) {

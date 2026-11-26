@@ -72,6 +72,6 @@ Bản demo V10 bổ sung một trang đăng nhập chung và các cổng USER, A
 
 Tài khoản đã được xác minh qua API có tại [docs/DEMO_ACCOUNTS.md](docs/DEMO_ACCOUNTS.md). Kết quả kiểm tra chi tiết ở [docs/TEST_REPORT_V10.md](docs/TEST_REPORT_V10.md). Kiểm tra quyền ở [docs/RBAC_MATRIX.md](docs/RBAC_MATRIX.md).
 
-## Demo phân quyền với 15 tài khoản
+## Demo phân quyền với 18 tài khoản
 
 Xem [tài khoản, sáu cổng và hướng dẫn kiểm thử](docs/RBAC_ALL_ACCOUNTS.md) để chạy bản V10 mở rộng.
