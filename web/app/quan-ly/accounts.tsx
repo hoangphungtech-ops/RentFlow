@@ -6,7 +6,7 @@ import type { Overview } from './page'
 
 type Account = Overview['actor'] & { id: string; lockedAt: string | null; active: boolean; emailVerifiedAt: string | null; access: { propertyId: string }[] }
 type Invitation = { code: string; expiresAt: string }
-const roles: [string, string][] = [['STAFF','Nhân viên'], ['ACCOUNTANT','Kế toán'], ['RENTER','Người thuê']]
+const roles: [string, string][] = [['MANAGER','Quản lý'], ['STAFF','Nhân viên'], ['ACCOUNTANT','Kế toán'], ['RENTER','Người thuê']]
 
 export function AccountSettings({ actor, properties, tenants, signedOut }: {
   actor: Overview['actor']; properties: Overview['properties']; tenants: Overview['tenants']; signedOut: (message?: string) => void

@@ -17,9 +17,11 @@ enum UserRoleStub {
   ACCOUNTANT
   RENTER
   ADMIN
+  MANAGER
 }
 
 model User {
+  assignedMaintenance MaintenanceRequest[] @relation("MaintenanceAssignee")
   id        String       @id @default(uuid()) @db.Char(36)
   email     String       @unique
   fullName  String
@@ -436,6 +438,7 @@ model MaintenanceRequest {
   id String @id @default(uuid()) @db.Char(36)
   leaseId String @db.Char(36)
   userId String @db.Char(36)
+  assigneeId String? @db.Char(36)
   title String @db.VarChar(120)
   description String @db.VarChar(1000)
   status MaintenanceStatus @default(OPEN)
@@ -443,6 +446,8 @@ model MaintenanceRequest {
   updatedAt DateTime @updatedAt
   lease Lease @relation(fields: [leaseId], references: [id])
   user User @relation(fields: [userId], references: [id])
+  assignee User? @relation("MaintenanceAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  @@index([assigneeId])
   @@index([leaseId, status])
   @@index([userId, createdAt])
 }

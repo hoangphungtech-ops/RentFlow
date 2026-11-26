@@ -71,3 +71,7 @@ Mật khẩu của tài khoản mẫu do người chạy đặt trong `DEMO_PASS
 Bản demo V10 bổ sung một trang đăng nhập chung và các cổng USER, ADMIN, MANAGER. Để chạy trên Windows bằng Docker Desktop, xem [hướng dẫn demo V10](docs/DEMO_GUIDE.md), rồi chạy `powershell -ExecutionPolicy Bypass -File .\\RUN-RENTFLOW.ps1`. Cấu hình dùng database và volume riêng cho `rentflow-v10-phung-demo`.
 
 Tài khoản đã được xác minh qua API có tại [docs/DEMO_ACCOUNTS.md](docs/DEMO_ACCOUNTS.md). Kết quả kiểm tra chi tiết ở [docs/TEST_REPORT_V10.md](docs/TEST_REPORT_V10.md). Kiểm tra quyền ở [docs/RBAC_MATRIX.md](docs/RBAC_MATRIX.md).
+
+## Demo phân quyền với 15 tài khoản
+
+Xem [tài khoản, sáu cổng và hướng dẫn kiểm thử](docs/RBAC_ALL_ACCOUNTS.md) để chạy bản V10 mở rộng.

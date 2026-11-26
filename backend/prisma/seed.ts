@@ -85,8 +85,8 @@ async function main() {
   for (const u of users) {
     await prisma.user.upsert({
       where: { id: u.id },
-      update: { passwordHash: hash },
-      create: { ...u, passwordHash: hash },
+      update: process.env.RENTFLOW_V10_DEMO === "1" ? {} : { passwordHash: hash },
+      create: { ...u, passwordHash: hash, isDemo: process.env.RENTFLOW_V10_DEMO === "1" },
     });
   }
 

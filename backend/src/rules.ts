@@ -25,7 +25,7 @@ export function allow(actor: Actor, ...roles: Actor['role'][]) {
 
 export function propertyScope(actor: Actor): Prisma.PropertyWhereInput {
   if (actor.role === 'OWNER') return { ownerId: actor.id };
-  if (actor.role === 'RENTER') return { id: { in: [] } };
+  if (['RENTER', 'ADMIN'].includes(actor.role)) return { id: { in: [] } };
   return { access: { some: { userId: actor.id } } };
 }
 

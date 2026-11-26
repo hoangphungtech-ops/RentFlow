@@ -13,7 +13,7 @@ const password = z.string().min(1).max(128);
 const strongPassword = z.string().min(12).max(128);
 const username = z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_.-]{2,31}$/);
 const email = z.email().max(254).toLowerCase();
-const role = z.enum(['STAFF', 'ACCOUNTANT', 'RENTER']);
+const role = z.enum(['MANAGER', 'STAFF', 'ACCOUNTANT', 'RENTER']);
 const confirmation = { newPassword: strongPassword, confirmPassword: strongPassword };
 const managedSelect = {
   ...actorSelect, lockedAt: true, emailVerifiedAt: true,
@@ -237,7 +237,7 @@ export class AccountManagement {
   }
 
   @Post('accounts')
-  @ApiBody({ schema: { type: 'object', required: ['username','email','fullName','role','propertyId'], properties: { username: { type: 'string' }, email: { type: 'string', format: 'email' }, fullName: { type: 'string' }, role: { type: 'string', enum: ['STAFF','ACCOUNTANT','RENTER'] }, propertyId: { type: 'string', format: 'uuid' } } } })
+  @ApiBody({ schema: { type: 'object', required: ['username','email','fullName','role','propertyId'], properties: { username: { type: 'string' }, email: { type: 'string', format: 'email' }, fullName: { type: 'string' }, role: { type: 'string', enum: ['MANAGER','STAFF','ACCOUNTANT','RENTER'] }, propertyId: { type: 'string', format: 'uuid' } } } })
   async create(@Req() { actor }: SessionRequest, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     allow(actor, 'OWNER');
     const input = parse(z.object({ username, email, fullName: label(120), role, propertyId: id }), body);
@@ -268,7 +268,7 @@ export class AccountManagement {
   }
 
   @Post('accounts/:userId/profile')
-  @ApiBody({ schema: { type: 'object', required: ['username','fullName','role'], properties: { username: { type: 'string' }, email: { type: 'string', format: 'email', description: 'Pending accounts only.' }, fullName: { type: 'string' }, role: { type: 'string', enum: ['STAFF','ACCOUNTANT','RENTER'] } } } })
+  @ApiBody({ schema: { type: 'object', required: ['username','fullName','role'], properties: { username: { type: 'string' }, email: { type: 'string', format: 'email', description: 'Pending accounts only.' }, fullName: { type: 'string' }, role: { type: 'string', enum: ['MANAGER','STAFF','ACCOUNTANT','RENTER'] } } } })
   async edit(@Req() { actor }: SessionRequest, @Param('userId') userId: string, @Body() body: unknown) {
     allow(actor, 'OWNER');
     const input = parse(z.object({ fullName: label(120), username, role, email: email.optional() }), body);

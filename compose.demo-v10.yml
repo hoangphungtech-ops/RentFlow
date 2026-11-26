@@ -33,8 +33,12 @@ services:
       - -ec
       - |
         ./node_modules/.bin/prisma migrate deploy
-        node dist/prisma/seed.js
+        if [ ! -f /app/uploads/.v9-seeded ]; then
+          node dist/prisma/seed.js
+          touch /app/uploads/.v9-seeded
+        fi
         node dist/prisma/seed-v10.js
+        node dist/prisma/seed-rbac.js
     volumes:
       - rentflow_v10_uploads:/app/uploads
     depends_on:

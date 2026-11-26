@@ -74,7 +74,8 @@ function LeaseCreateForm({ overview, write }: { overview: Overview; write: Write
 export function AdminForms({ overview, tab, current, write }: { overview: Overview; tab: string; current?: string; write: Write }) {
   const { actor, properties, leases, tenants, invoices } = overview
   const owner = actor.role === 'OWNER'
-  const operations = owner || actor.role === 'STAFF'
+  const manages = owner || actor.role === 'MANAGER'
+  const operations = manages || actor.role === 'STAFF'
   const billing = owner || actor.role === 'ACCOUNTANT'
   const property = select(propertyField, 'Khu trọ', properties.map(row => [row.id, row.name]))
   const rooms = select('roomId', 'Phòng', properties.flatMap(row => row.rooms.map<[string, string]>(room => [room.id, row.name + ' · ' + room.roomCode])))
@@ -87,8 +88,8 @@ export function AdminForms({ overview, tab, current, write }: { overview: Overvi
     const { [key]: id, ...values } = data
     await write(resource + '/' + id + suffix, values)
   }
-  if (tab === 'Khu trọ & phòng' && owner) return <div className="forms">
-    <Action title="Tạo khu trọ" fields={[field('name','Tên khu'), field('address','Địa chỉ')]} submit={values => write('properties', values)} />
+  if (tab === 'Khu trọ & phòng' && manages) return <div className="forms">
+    {owner && <Action title="Tạo khu trọ" fields={[field('name','Tên khu'), field('address','Địa chỉ')]} submit={values => write('properties', values)} />}
     <Action title="Tạo phòng" fields={[property, field('roomCode','Mã phòng'), n('baseRentPrice','Giá thuê'), n('maxOccupants','Sức chứa'), { ...select('status','Trạng thái',[['AVAILABLE','Trống'],['MAINTENANCE','Bảo trì']]), value: 'AVAILABLE' }]} submit={scoped('properties', propertyField, '/rooms')} />
     <Action title="Cập nhật phòng" fields={[rooms, n('baseRentPrice','Giá thuê mới'), n('maxOccupants','Sức chứa'), select('status','Trạng thái',[['AVAILABLE','Trống'],['MAINTENANCE','Bảo trì'],['OCCUPIED','Đang thuê']])]} submit={scoped('rooms','roomId','/settings')} />
   </div>
@@ -97,7 +98,7 @@ export function AdminForms({ overview, tab, current, write }: { overview: Overvi
   ]} submit={scoped('properties', propertyField, '/tenants')} />
   if (tab === 'Hợp đồng' && operations) return <div className="forms">
     <LeaseCreateForm overview={overview} write={write} />
-    {owner && (activatable.length ? <Action title="Kích hoạt hợp đồng" fields={[leaseOptions(activatable)]} submit={scoped('leases', leaseField, '/activate')} /> : <p role="status">Chưa có hợp đồng nháp phù hợp với phòng trống.</p>)}
+    {manages && (activatable.length ? <Action title="Kích hoạt hợp đồng" fields={[leaseOptions(activatable)]} submit={scoped('leases', leaseField, '/activate')} /> : <p role="status">Chưa có hợp đồng nháp phù hợp với phòng trống.</p>)}
     {active.length ? <Action title="Lập biên bản bàn giao" fields={[leaseOptions(active), select('kind','Loại biên bản',[['IN','Nhận phòng'],['OUT','Trả phòng']]), d('date','Ngày bàn giao'), field('condition','Tình trạng'), field('inventory','Tài sản'), n('electric','Chỉ số điện'), n('water','Chỉ số nước'), field('notes','Ghi chú','text',true)]} submit={scoped('leases', leaseField, '/handovers')} /> : <p role="status">Chưa có hợp đồng đang hiệu lực để lập biên bản bàn giao.</p>}
   </div>
   if (tab === 'Điện nước' && operations) return <div className="forms">
@@ -114,7 +115,7 @@ export function AdminForms({ overview, tab, current, write }: { overview: Overvi
       select('invoiceId','Hóa đơn bù nợ',invoices.filter(row => row.leaseId === chosen.id && Number(row.remainingAmount) > 0).map(row => [row.id, row.billingPeriod]),true),
     ]} submit={values => write('leases/' + chosen.id + '/settlement', values)} />}
   </div>
-  if (tab === 'Cài đặt') return <p>Vai trò tài khoản hiện tại · {{ OWNER: 'Chủ trọ', STAFF: 'Nhân viên', ACCOUNTANT: 'Kế toán' }[actor.role]}</p>
+  if (tab === 'Cài đặt') return <p>Vai trò tài khoản hiện tại · {{ OWNER: 'Chủ trọ', MANAGER: 'Quản lý', STAFF: 'Nhân viên', ACCOUNTANT: 'Kế toán' }[actor.role]}</p>
   return null
 }
 

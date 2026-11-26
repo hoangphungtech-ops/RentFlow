@@ -6,7 +6,7 @@ import type { Overview } from './quan-ly/dashboard'
 
 type Room = {id:string;roomCode:string;baseRentPrice:string;maxOccupants:number;floorArea:number|null;listingStatus?:string;amenities:string|null;property:{name:string;address:string};images:{id:string;alt:string;isPrimary:boolean}[]}
 type AppData = { rooms:Room[]; bookings:{id:string;status:string;kind:string;room:{roomCode:string;property:{name:string}}}[]; maintenance:{id:string;title:string;status:string}[]; application:{status:string}|null }
-type ManagerData = {rooms:Room[];bookings:{id:string;status:string;kind:string;user:{fullName:string};room:{roomCode:string;property:{name:string}}}[];maintenance:{id:string;title:string;status:string;leaseId:string}[];payments:{amount:string;confirmedAt:string}[]}
+type ManagerData = {rooms:Room[];bookings:{id:string;status:string;kind:string;user:{fullName:string};room:{roomCode:string;property:{name:string}}}[];maintenance:{id:string;title:string;status:string;leaseId:string;assigneeId:string|null;lease:{room:{propertyId:string}}}[];staff:{propertyId:string;user:{id:string;fullName:string}}[];payments:{amount:string;confirmedAt:string}[]}
 
 export function PortalSection({tab,role,overview,refresh}:{tab:string;role:'user'|'manager';overview:Overview;refresh:()=>Promise<void>}) {
   const [data,setData]=useState<AppData|ManagerData>()
@@ -19,7 +19,9 @@ export function PortalSection({tab,role,overview,refresh}:{tab:string;role:'user
       : await api<AppData|ManagerData>(role==='user'?'v10/user':'v10/manager')
     setData(role==='user'&&tab==='Tìm phòng'?{rooms:value as Room[],bookings:[],maintenance:[],application:null}:value as AppData|ManagerData)
   }
-  useEffect(()=>{void load()},[tab])
+  useEffect(()=>{
+    if (['Tìm phòng', 'Yêu cầu thuê', 'Bảo trì', 'Đăng phòng'].includes(tab)) void load().catch(error=>setMessage(error.message))
+  },[tab])
   async function getPhotos(room:Room) {
     const urls=await Promise.all(room.images.map(async photo=>{
       const response=await fetch('/api/v10/listing-photos/'+room.id+'/'+photo.id,{headers:{'X-RentFlow-Web':'1'}})
@@ -62,7 +64,13 @@ export function PortalSection({tab,role,overview,refresh}:{tab:string;role:'user
         <div className="portal-pictures">{room.images.map(photo=><button key={photo.id} onClick={async()=>{const res=await fetch('/api/v10/listing-photos/'+room.id+'/'+photo.id,{headers:{'X-RentFlow-Web':'1'}});const url=URL.createObjectURL(await res.blob());setPhotos(x=>({...x,[room.id]:[...(x[room.id]??[]),url]}))}}>Ảnh · {photo.alt}</button>)}{(photos[room.id]??[]).map(src=><img key={src} src={src} alt="Ảnh phòng"/>)}</div>
       </article>)}
       {tab==='Yêu cầu thuê'&&d?.bookings.map(row=><p key={row.id}>{row.room.roomCode} · {row.user.fullName} · {row.status}<button onClick={async()=>{await api('v10/manager/bookings/'+row.id,'',{approve:true});await load()}}>Duyệt</button><button onClick={async()=>{await api('v10/manager/bookings/'+row.id,'',{approve:false});await load()}}>Từ chối</button></p>)}
-      {tab==='Bảo trì'&&d?.maintenance.map(row=><p key={row.id}>{row.title} · {row.status}{row.status!=='DONE'&&<button onClick={async()=>{await api('v10/manager/maintenance/'+row.id,'',{status:row.status==='OPEN'?'IN_PROGRESS':'DONE'});await load()}}>Cập nhật tiến độ</button>}</p>)}
+      {tab==='Bảo trì'&&d?.maintenance.map(row=><article key={row.id} className="card">
+        <h3>{row.title}</h3><p>{row.status}</p>
+        {row.status!=='DONE'&&<>
+          <Action title="Cập nhật tiến độ" submit={async()=>{await api('v10/manager/maintenance/'+row.id,'',{status:row.status==='OPEN'?'IN_PROGRESS':'DONE'});await load()}}/>
+          {d.staff.some(entry=>entry.propertyId===row.lease.room.propertyId) && <Action title="Giao việc" fields={[{key:'assigneeId',label:'Nhân viên',value:row.assigneeId??'',options:d.staff.filter(entry=>entry.propertyId===row.lease.room.propertyId).map(entry=>[entry.user.id,entry.user.fullName])}]} submit={async value=>{await api('v10/manager/maintenance/'+row.id+'/assign','',value);await load()}}/>}
+        </>}
+      </article>)}
     </section>
   }
   if(role==='manager'&&tab==='Điện nước') return <section className="card"><h2>Chỉ số và ảnh đối chiếu</h2>

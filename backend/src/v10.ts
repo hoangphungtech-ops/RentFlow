@@ -8,7 +8,7 @@ import { actorSelect, db, passwordHash, SessionGuard, SessionRequest } from './a
 import { imagePath, optimizeImage, UploadedImage } from './room-images';
 import { allow, atomic, audit, day, found, id, label, leaseScope, meter, notify, parse, period, propertyScope, requireCondition } from './rules';
 
-const managerRoles = ['OWNER', 'STAFF', 'ACCOUNTANT'] as const;
+const managerRoles = ['OWNER', 'MANAGER', 'STAFF'] as const;
 const openListing = { listingStatus: 'PUBLISHED', status: 'AVAILABLE', bookingRequests: { none: { holdFlag: 1 } } } as const;
 const imageSelect = { id: true, alt: true, isPrimary: true } as const;
 const listingSelect = {
@@ -17,7 +17,7 @@ const listingSelect = {
   images: { select: imageSelect, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
 } satisfies Prisma.RoomSelect;
 const bookingLinks = { room: { select: { id: true, roomCode: true, property: { select: { name: true } } } } };
-const maintenanceLinks = { lease: { select: { id: true, room: { select: { roomCode: true, property: { select: { name: true } } } } } } };
+const maintenanceLinks = { lease: { select: { id: true, room: { select: { roomCode: true, propertyId: true, property: { select: { name: true } } } } } } };
 
 @Controller('auth')
 export class RentFlowRegistration {
@@ -35,7 +35,7 @@ export class RentFlowRegistration {
 export class RentFlowV10Controller {
   @Get('me')
   me(@Req() { actor }: SessionRequest) {
-    return { ...actor, portal: actor.role === 'ADMIN' ? 'admin' : actor.role === 'RENTER' ? 'user' : 'manager' };
+    return { ...actor, portal: ({ ADMIN: 'admin', OWNER: 'owner', MANAGER: 'manager', STAFF: 'staff', ACCOUNTANT: 'accountant', RENTER: 'user' } as const)[actor.role] };
   }
 
   @Get('admin')
@@ -63,6 +63,19 @@ export class RentFlowV10Controller {
       if (locked) await tx.session.deleteMany({ where: { userId } });
       await audit(tx, actor, locked ? 'ADMIN_ACCOUNT_LOCKED' : 'ADMIN_ACCOUNT_UNLOCKED', userId);
       return { locked };
+    });
+  }
+
+  @Post('admin/users/:id/role')
+  async adminRole(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) userId: string, @Body() body: unknown) {
+    allow(actor, 'ADMIN');
+    const { role } = parse(z.object({ role: z.enum(['MANAGER', 'STAFF', 'ACCOUNTANT']) }).strict(), body);
+    return atomic(async tx => {
+      const current = found(await tx.user.findFirst({ where: { id: userId, role: { in: ['MANAGER', 'STAFF', 'ACCOUNTANT'] } } }));
+      const result = await tx.user.update({ where: { id: userId }, data: { role }, select: actorSelect });
+      await tx.session.deleteMany({ where: { userId } });
+      await audit(tx, actor, 'ADMIN_ROLE_UPDATED', userId, current.role + ' → ' + role);
+      return result;
     });
   }
 
@@ -106,13 +119,16 @@ export class RentFlowV10Controller {
   async manager(@Req() { actor }: SessionRequest) {
     allow(actor, ...managerRoles);
     const scope = propertyScope(actor);
-    const [rooms, bookings, maintenance, payments] = await Promise.all([
+    const [rooms, bookings, maintenance] = await Promise.all([
       db.room.findMany({ where: { property: scope }, select: listingSelect, orderBy: { updatedAt: 'desc' }, take: 100 }),
       db.bookingRequest.findMany({ where: { room: { property: scope } }, include: { ...bookingLinks, user: { select: { fullName: true } } }, orderBy: { createdAt: 'desc' }, take: 100 }),
-      db.maintenanceRequest.findMany({ where: { lease: leaseScope(actor) }, include: maintenanceLinks, orderBy: { createdAt: 'desc' }, take: 100 }),
-      db.payment.findMany({ where: { status: 'CONFIRMED', invoice: { lease: leaseScope(actor) } }, select: { amount: true, confirmedAt: true }, orderBy: { confirmedAt: 'desc' }, take: 1000 }),
+      db.maintenanceRequest.findMany({ where: { lease: leaseScope(actor), ...(actor.role === 'STAFF' ? { assigneeId: actor.id } : {}) }, include: maintenanceLinks, orderBy: { createdAt: 'desc' }, take: 100 }),
     ]);
-    return { rooms, bookings, maintenance, payments };
+    const staff = actor.role === 'STAFF' ? [] : await db.propertyAccess.findMany({
+      where: { property: scope, user: { role: 'STAFF', lockedAt: null } },
+      select: { propertyId: true, user: { select: { id: true, fullName: true } } },
+    });
+    return { rooms, bookings: actor.role === 'STAFF' ? [] : bookings, maintenance, staff };
   }
 
   @Post('manager/properties/:id')
@@ -129,7 +145,7 @@ export class RentFlowV10Controller {
 
   @Post('manager/rooms/:id/listing')
   async publish(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) roomId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const { floorArea, amenities } = parse(z.object({ floorArea: z.number().min(1).max(10000), amenities: label(500).optional() }).strict(), body);
     return atomic(async tx => {
       found(await tx.room.findFirst({ where: { id: roomId, property: propertyScope(actor) } }));
@@ -184,7 +200,7 @@ export class RentFlowV10Controller {
 
   @Post('manager/bookings/:id')
   async reviewBooking(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) bookingId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const { approve } = parse(z.object({ approve: z.boolean() }).strict(), body);
     return atomic(async tx => {
       const row = found(await tx.bookingRequest.findFirst({ where: { id: bookingId, status: { in: approve ? ['PENDING'] : ['PENDING', 'APPROVED', 'CONFIRMED'] }, room: { property: propertyScope(actor) } }, include: { room: true } }));
@@ -219,12 +235,25 @@ export class RentFlowV10Controller {
     });
   }
 
+  @Post('manager/maintenance/:id/assign')
+  async assignMaintenance(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) ticketId: string, @Body() body: unknown) {
+    allow(actor, 'OWNER', 'MANAGER');
+    const { assigneeId } = parse(z.object({ assigneeId: id }).strict(), body);
+    return atomic(async tx => {
+      const ticket = found(await tx.maintenanceRequest.findFirst({ where: { id: ticketId, lease: leaseScope(actor), status: { not: 'DONE' } }, include: { lease: { select: { room: { select: { propertyId: true } } } } } }));
+      found(await tx.propertyAccess.findFirst({ where: { propertyId: ticket.lease.room.propertyId, userId: assigneeId, user: { role: 'STAFF', lockedAt: null } } }));
+      const result = await tx.maintenanceRequest.update({ where: { id: ticketId }, data: { assigneeId } });
+      await audit(tx, actor, 'MAINTENANCE_ASSIGNED', ticketId, assigneeId);
+      return result;
+    });
+  }
+
   @Post('manager/maintenance/:id')
   async maintenanceStatus(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) ticketId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const { status } = parse(z.object({ status: z.enum(['IN_PROGRESS', 'DONE']) }).strict(), body);
     return atomic(async tx => {
-      const row = found(await tx.maintenanceRequest.findFirst({ where: { id: ticketId, lease: leaseScope(actor) } }));
+      const row = found(await tx.maintenanceRequest.findFirst({ where: { id: ticketId, lease: leaseScope(actor), ...(actor.role === 'STAFF' ? { assigneeId: actor.id } : {}) } }));
       requireCondition(row.status === status || (row.status === 'OPEN' && status === 'IN_PROGRESS') || (row.status === 'IN_PROGRESS' && status === 'DONE'), 'Thứ tự cập nhật tiến độ không hợp lệ.');
       if (row.status === status) return row;
       const result = await tx.maintenanceRequest.update({ where: { id: ticketId }, data: { status } });
@@ -237,7 +266,7 @@ export class RentFlowV10Controller {
   @Post('manager/rooms/:id/meter-evidence')
   @UseInterceptors(FileFieldsInterceptor([{ name: 'electric', maxCount: 1 }, { name: 'water', maxCount: 1 }], { limits: { fileSize: 8 * 1024 * 1024, files: 2 } }))
   async record(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) roomId: string, @Body() body: unknown, @UploadedFiles() images: { electric?: UploadedImage[]; water?: UploadedImage[] }) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const numeric = z.coerce.number().pipe(meter);
     const data = parse(z.object({ billingPeriod: period, electricOld: numeric, electricNew: numeric, waterOld: numeric, waterNew: numeric }).strict(), body);
     if (data.electricNew < data.electricOld || data.waterNew < data.waterOld) throw new BadRequestException('Chỉ số cuối kỳ phải lớn hơn hoặc bằng đầu kỳ.');

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { PortalSection } from '../portal-sections'
+import { MeterPhotos } from '../meter-photos'
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Action, api, ApiError, field, select, vnd } from '../shared'
@@ -44,7 +45,7 @@ function InvoiceItems({ items }: { items: Item[] }) {
   </tbody></table>
 }
 
-export default function Dashboard({ portal }: { portal?: 'user' | 'manager' } = {}) {
+export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'owner' | 'staff' | 'accountant' } = {}) {
   const [signedIn, setSignedIn] = useState(false)
   const token = ''
   const [overview, setOverview] = useState<Overview>()
@@ -121,8 +122,27 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' } = 
     const endDay = localDay.format(new Date(lease.endDate))
     return lease.status === 'ACTIVE' && endDay >= today && endDay <= nextMonth
   }).sort((a, b) => a.endDate.localeCompare(b.endDate)) ?? []
-  const tabs = renter ? ['Tổng quan', ...(portal ? ['Tìm phòng', 'Yêu cầu thuê', 'Bảo trì', 'Hóa đơn & thanh toán'] : []), 'Hợp đồng', 'Thông báo', 'Cài đặt'] :
-    ['Tổng quan', 'Khu trọ & phòng', ...(portal ? ['Đăng phòng', 'Yêu cầu thuê', 'Bảo trì'] : []), 'Người thuê', 'Hợp đồng', 'Điện nước', 'Hóa đơn & thanh toán', 'Tiền cọc', 'Thông báo', 'Cài đặt']
+  function downloadInvoiceReport() {
+    const rows = [['Kỳ hóa đơn', 'Tổng tiền', 'Đã thu', 'Còn nợ', 'Trạng thái'],
+      ...(overview?.invoices ?? []).map(row => [row.billingPeriod, row.totalAmount, row.paidAmount, String(invoiceBalance(row)), labels[row.status] ?? row.status])]
+    const csv = rows.map(row => row.map(value => '"' + value.replaceAll('"', '""') + '"').join(',')).join('\r\n')
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'rentflow-cong-no.csv'
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+  const tabsByPortal = {
+    user: ['Tổng quan', 'Tìm phòng', 'Yêu cầu thuê', 'Bảo trì', 'Hóa đơn & thanh toán', 'Hợp đồng', 'Thông báo', 'Cài đặt'],
+    owner: ['Tổng quan', 'Khu trọ & phòng', 'Đăng phòng', 'Yêu cầu thuê', 'Bảo trì', 'Người thuê', 'Hợp đồng', 'Điện nước', 'Hóa đơn & thanh toán', 'Tiền cọc', 'Thông báo', 'Cài đặt'],
+    manager: ['Tổng quan', 'Khu trọ & phòng', 'Đăng phòng', 'Yêu cầu thuê', 'Bảo trì', 'Người thuê', 'Hợp đồng', 'Điện nước', 'Hóa đơn & thanh toán', 'Thông báo', 'Cài đặt'],
+    staff: ['Tổng quan', 'Khu trọ & phòng', 'Hợp đồng', 'Điện nước', 'Bảo trì', 'Thông báo', 'Cài đặt'],
+    accountant: ['Tổng quan', 'Hóa đơn & thanh toán', 'Thông báo', 'Cài đặt'],
+  }
+  const portalLabels = { user: 'Cổng người thuê', owner: 'Cổng chủ trọ', manager: 'Cổng quản lý khu trọ', staff: 'Cổng nhân viên', accountant: 'Cổng kế toán' }
+  const activePortal = portal ?? (renter ? 'user' : 'owner')
+  const tabs = tabsByPortal[activePortal]
   return <>
     <header className="mast"><Link href="/" className="brand">RentFlow</Link>{signedIn && <button className="ghost" onClick={async () => {
       try { await api('logout', token, {}) }
@@ -143,8 +163,8 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' } = 
       {overview && <>
         <nav aria-label="Quản lý">{tabs.map(item => <button key={item} aria-current={tab === item ? 'page' : undefined} onClick={() => { setTab(item); setLedger(undefined); setCurrent(''); setError(''); setNotice(''); setPrintId('') }}>{item}</button>)}</nav>
         <h1>{tab}</h1>
-        {portal && <p className="portal-label">{portal === 'user' ? 'Cổng người thuê' : 'Cổng quản lý khu trọ'}</p>}
-        {portal && <PortalSection key={tab} tab={tab} role={portal} overview={overview} refresh={refresh} />}
+        {portal && <p className="portal-label">{portalLabels[portal]}</p>}
+        {portal && portal !== 'accountant' && <PortalSection key={tab} tab={tab} role={portal === 'user' ? 'user' : 'manager'} overview={overview} refresh={refresh} />}
         <p className="muted">{overview.actor.fullName}</p>
         {tab === 'Cài đặt' && <AccountSettings actor={overview.actor} properties={overview.properties} tenants={overview.tenants} signedOut={signOut} />}
         {tab === 'Tổng quan' && <>
@@ -188,13 +208,14 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' } = 
             </div>
           </section>
         </>}
-        {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} refresh={refresh} owner={role === 'OWNER'} />}
+        {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} refresh={refresh} owner={role === 'OWNER' || role === 'MANAGER'} />}
         {tab === 'Người thuê' && <ul>{overview.tenants.map(person => <li key={person.id}>{person.fullName}</li>)}</ul>}
         {tab === 'Điện nước' && overview.properties.map(property => <section key={property.id} className="card"><h2>{property.name}</h2>{property.utilityRates.map(rate =>
           <p key={rate.id}>{rate.serviceName} · {vnd(rate.unitPrice)}/{rate.unit} · {date(rate.effectiveFrom)}</p>)}</section>)}
         {tab === 'Thông báo' && (overview.notifications.length ? <ul>{overview.notifications.map(row => <li key={row.id}>{row.message}</li>)}</ul> : <p>Chưa có thông báo.</p>)}
         {tab === 'Hóa đơn & thanh toán' && <section aria-label="Bảng kê hóa đơn">
           <h2>Bảng kê hóa đơn</h2>
+          {canConfirm && <button className="ghost" onClick={downloadInvoiceReport}>Xuất bảng kê CSV</button>}
           {overview.invoices.length ? <div className="table-wrap"><table className="invoice-table"><thead><tr>
             <th scope="col">Phòng · Kỳ</th><th scope="col">Tổng tiền</th><th scope="col">Đã thu</th><th scope="col">Còn nợ</th><th scope="col">Trạng thái</th><th scope="col">Chi tiết</th>
           </tr></thead><tbody>{overview.invoices.map(invoice => {
@@ -217,20 +238,20 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' } = 
         </section>}
         {ledger && <section ref={ledgerRef} className="card print-ledger">
           {notice && <p role="status" className="feedback">{notice}</p>}
-          <h2>Phòng {ledger.room.roomCode}</h2><p>{date(ledger.startDate)} – {date(ledger.endDate)} · {vnd(ledger.rentAmount)}/tháng</p>
+          <h2>Phòng {ledger.room.roomCode}</h2><p>{date(ledger.startDate)} – {date(ledger.endDate)}{role !== 'STAFF' && ' · ' + vnd(ledger.rentAmount) + '/tháng'}</p>
           {ledger.tenants.map(({ tenant, representative }, i) => <p key={i}>{tenant.fullName}{representative ? ' · Đại diện' : ''}</p>)}
           {ledger.handovers.map(row => <div key={row.kind}><h3>{row.kind === 'IN' ? 'Nhận phòng' : 'Trả phòng'} · {date(row.date)}</h3>
             <p>{row.condition} · {row.inventory} · Điện {row.electric} · Nước {row.water}</p>{row.notes && <p>{row.notes}</p>}
             <p>{row.confirmedAt ? 'Đã xác nhận' : 'Chờ xác nhận'}</p>
-            {!row.confirmedAt && role === 'OWNER' && <Action title="Xác nhận biên bản" submit={values => write('leases/' + ledger.id + '/handovers/' + row.kind + '/confirm', values)} />}
+            {!row.confirmedAt && (role === 'OWNER' || role === 'MANAGER') && <Action title="Xác nhận biên bản" submit={values => write('leases/' + ledger.id + '/handovers/' + row.kind + '/confirm', values)} />}
           </div>)}
-          <details><summary>Xem quyết toán</summary>
+          {role !== 'STAFF' && <details><summary>Xem quyết toán</summary>
             <p>Cọc thỏa thuận {vnd(ledger.depositAgreed)} · Thực nhận {vnd(ledger.depositReceived)}</p>
             {ledger.settlement ? <><p>Khấu trừ {vnd(ledger.settlement.deduction)} · Bù nợ {vnd(ledger.settlement.debtOffset)}</p>
               <p>Căn cứ {ledger.settlement.reason}</p>
               {ledger.settlement.invoiceId && <p>Hóa đơn bù nợ kỳ {ledger.invoices.find(row => row.id === ledger.settlement?.invoiceId)?.billingPeriod}</p>}
               <strong>Hoàn cọc {vnd(ledger.settlement.refund)}</strong></> : <p>Chưa chốt quyết toán.</p>}
-          </details>
+          </details>}
           {ledger.invoices.map(invoice => <article className="invoice" id={'invoice-' + invoice.id} key={invoice.id}>
             <div className="invoice-head"><h3>Hóa đơn {invoice.billingPeriod} <InvoiceBadge status={invoice.status} /></h3><button type="button" className="ghost no-print" onClick={() => {
               flushSync(() => setPrintId(invoice.id))
@@ -238,6 +259,7 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' } = 
             }}>In / Lưu PDF</button></div>
             <p>Tổng {vnd(invoice.totalAmount)} · Đã thu {vnd(invoice.paidAmount)} · Còn nợ {vnd(invoiceBalance(invoice))}</p>
             {invoice.cancelReason && <p>Lý do hủy: {invoice.cancelReason}</p>}
+            {invoice.status !== "CANCELLED" && <MeterPhotos invoiceId={invoice.id} />}
             <details open={invoice.id === expandedInvoiceId || undefined}><summary>Xem cách tính</summary>
               <div className="table-wrap"><InvoiceItems items={invoice.items} /></div>
               <h4>Lịch sử thanh toán</h4>

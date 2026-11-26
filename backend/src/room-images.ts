@@ -131,7 +131,7 @@ export class RoomImagesController {
     @Param('roomId', ParseUUIDPipe) roomId: string,
     @UploadedFile() file: UploadedImage | undefined,
   ) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const room = await this.roomScope(actor, roomId);
     const saved = await this.saveOptimized(file);
     try {
@@ -168,7 +168,7 @@ export class RoomImagesController {
     @Param('imageId', ParseUUIDPipe) imageId: string,
     @UploadedFile() file: UploadedImage | undefined,
   ) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     await this.roomScope(actor, roomId);
     const saved = await this.saveOptimized(file);
     try {
@@ -195,7 +195,7 @@ export class RoomImagesController {
     @Param('roomId', ParseUUIDPipe) roomId: string,
     @Param('imageId', ParseUUIDPipe) imageId: string,
   ) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     await this.roomScope(actor, roomId);
     return atomic(async tx => {
       await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM Room WHERE id = ${roomId} FOR UPDATE`;
@@ -213,7 +213,7 @@ export class RoomImagesController {
     @Param('roomId', ParseUUIDPipe) roomId: string,
     @Param('imageId', ParseUUIDPipe) imageId: string,
   ) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     await this.roomScope(actor, roomId);
     const result = await atomic(async tx => {
       await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM Room WHERE id = ${roomId} FOR UPDATE`;

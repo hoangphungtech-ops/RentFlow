@@ -63,7 +63,7 @@ export class RentalController {
         utilityRates: true,
       } }),
       db.lease.findMany({ where: scope, include: { room: { select: { roomCode: true, propertyId: true } }, tenants: { include: { tenant: { select: { id: true, fullName: true } } } } }, orderBy: { createdAt: 'desc' } }),
-      db.invoice.findMany({
+      actor.role === 'STAFF' ? [] : db.invoice.findMany({
         where: { lease: scope, status: { notIn: canSeeCancelled ? ['DRAFT'] : ['DRAFT', 'CANCELLED'] } },
         include: { _count: { select: { payments: { where: { status: 'PENDING' } } } } },
         orderBy: { dueDate: 'asc' },
@@ -81,7 +81,7 @@ export class RentalController {
         return { ...roomData, occupantCount: movedIn && !movedOut ? lease.tenants.length : 0, activeLeaseCount: room.leases.length };
       }),
     }));
-    return { actor, properties: roomProperties, leases, invoices, notifications, tenants };
+    return { actor, properties: roomProperties, leases: actor.role === 'STAFF' ? leases.map(row => ({ ...row, rentAmount: null, depositAgreed: null, depositReceived: null })) : leases, invoices, notifications, tenants };
   }
 
   private async remindDue(userId: string) {
@@ -125,7 +125,7 @@ export class RentalController {
 
   @Post('properties/:propertyId/rooms')
   async room(@Req() { actor }: SessionRequest, @Param('propertyId') propertyId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER');
+    allow(actor, 'OWNER', 'MANAGER');
     const data = parse(z.object({ roomCode: label(30), baseRentPrice: money, maxOccupants: z.number().int().min(1).max(50), status: z.enum(['AVAILABLE', 'MAINTENANCE']).default('AVAILABLE') }), body);
     return atomic(async tx => {
       found(await tx.property.findFirst({ where: { id: propertyId, ...propertyScope(actor) } }));
@@ -137,7 +137,7 @@ export class RentalController {
 
   @Post('rooms/:roomId/settings')
   async roomSettings(@Req() { actor }: SessionRequest, @Param('roomId') roomId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER');
+    allow(actor, 'OWNER', 'MANAGER');
     const data = parse(z.object({ baseRentPrice: money, maxOccupants: z.number().int().min(1).max(50), status: z.enum(['AVAILABLE', 'MAINTENANCE', 'OCCUPIED']) }), body);
     return atomic(async tx => {
       const room = found(await tx.room.findFirst({ where: { id: roomId, property: propertyScope(actor) } }));
@@ -159,7 +159,7 @@ export class RentalController {
     return atomic(async tx => {
       found(await tx.property.findFirst({ where: { id: propertyId, ...propertyScope(actor) } }));
       const user = found(await tx.user.findFirst({
-        where: { email: data.email.toLowerCase(), role: { in: ['STAFF', 'ACCOUNTANT'] }, OR: [{ managedById: actor.id }, { managedById: null }] }, select: { id: true },
+        where: { email: data.email.toLowerCase(), role: { in: ['MANAGER', 'STAFF', 'ACCOUNTANT'] }, OR: [{ managedById: actor.id }, { managedById: null }] }, select: { id: true },
       }));
       const key = { propertyId, userId: user.id };
       if (data.operation === 'GRANT') {
@@ -174,7 +174,7 @@ export class RentalController {
 
   @Post('properties/:propertyId/tenants')
   async tenant(@Req() { actor }: SessionRequest, @Param('propertyId') propertyId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const { email, ...data } = parse(z.object({ fullName: label(120), contact: label(120).optional(), email: z.email().max(254).optional() }), body);
     if (email) allow(actor, 'OWNER');
     return atomic(async tx => {
@@ -188,7 +188,7 @@ export class RentalController {
 
   @Post('leases')
   async lease(@Req() { actor }: SessionRequest, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const { roomId, representative, occupants, ...data } = parse(z.object({
       roomId: id, representative: id, occupants: z.array(id).max(49).default([]),
       startDate: day, endDate: day, rentAmount: money, depositAgreed: money,
@@ -211,7 +211,7 @@ export class RentalController {
 
   @Post('leases/:leaseId/activate')
   async activate(@Req() { actor }: SessionRequest, @Param('leaseId') leaseId: string) {
-    allow(actor, 'OWNER');
+    allow(actor, 'OWNER', 'MANAGER');
     return atomic(async tx => {
       const lease = found(await tx.lease.findFirst({ where: { id: leaseId, ...leaseScope(actor) }, include: { room: true, tenants: { include: { tenant: { select: { userId: true } } } }, _count: { select: { tenants: true } } } }));
       requireCondition(lease.status === 'DRAFT', 'Chỉ kích hoạt hợp đồng nháp');
@@ -233,7 +233,7 @@ export class RentalController {
 
   @Post('leases/:leaseId/handovers')
   async handover(@Req() { actor }: SessionRequest, @Param('leaseId') leaseId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const data = parse(z.object({ kind: z.enum(['IN', 'OUT']), date: day, condition: label(255), inventory: label(2000), electric: meter, water: meter, notes: label(1000).optional() }), body);
     return atomic(async tx => {
       const lease = found(await tx.lease.findFirst({ where: { id: leaseId, ...leaseScope(actor) }, include: { handovers: true } }));
@@ -250,7 +250,7 @@ export class RentalController {
 
   @Post('leases/:leaseId/handovers/:kind/confirm')
   async confirmHandover(@Req() { actor }: SessionRequest, @Param('leaseId') leaseId: string, @Param('kind') kindParam: string) {
-    allow(actor, 'OWNER');
+    allow(actor, 'OWNER', 'MANAGER');
     const kind = parse(z.enum(['IN', 'OUT']), kindParam);
     return atomic(async tx => {
       const row = found(await tx.handover.findFirst({ where: { leaseId, kind, lease: leaseScope(actor) } }));
@@ -264,7 +264,7 @@ export class RentalController {
   @Get('leases/:leaseId/ledger')
   async ledger(@Req() { actor }: SessionRequest, @Param('leaseId') leaseId: string) {
     const canSeeCancelled = actor.role === 'OWNER' || actor.role === 'ACCOUNTANT';
-    return found(await db.lease.findFirst({
+    const ledger = found(await db.lease.findFirst({
       where: { id: leaseId, ...leaseScope(actor) },
       include: {
         room: { select: { roomCode: true, property: { select: { name: true } } } },
@@ -273,6 +273,8 @@ export class RentalController {
         invoices: { where: { status: { notIn: canSeeCancelled ? ['DRAFT'] : ['DRAFT', 'CANCELLED'] } }, include: { items: true, payments: true }, orderBy: [{ billingPeriod: 'desc' }, { createdAt: 'desc' }] },
       },
     }));
+    if (actor.role !== 'STAFF') return ledger;
+    return { ...ledger, invoices: [], settlement: null, rentAmount: null, depositAgreed: null, depositReceived: null };
   }
 
   @Post('properties/:propertyId/rates')
@@ -289,7 +291,7 @@ export class RentalController {
 
   @Post('rooms/:roomId/readings')
   async reading(@Req() { actor }: SessionRequest, @Param('roomId') roomId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const data = parse(z.object({ billingPeriod: period, electricOld: meter, electricNew: meter, waterOld: meter, waterNew: meter }), body);
     requireCondition(data.electricOld <= data.electricNew && data.waterOld <= data.waterNew, 'Chỉ số cuối phải từ chỉ số đầu trở lên');
     return atomic(async tx => {
@@ -416,7 +418,7 @@ export class RentalController {
 
   @Post('rooms/:roomId/readings/correct')
   async correctReading(@Req() { actor }: SessionRequest, @Param('roomId') roomId: string, @Body() body: unknown) {
-    allow(actor, 'OWNER', 'STAFF');
+    allow(actor, 'OWNER', 'MANAGER', 'STAFF');
     const data = parse(z.object({
       billingPeriod: period, electricOld: meter, electricNew: meter, waterOld: meter, waterNew: meter, reason: label(255),
     }), body);
