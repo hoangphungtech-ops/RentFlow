@@ -160,3 +160,9 @@ details{border:1px solid var(--line);border-radius:.5rem;padding:.65rem;margin:.
   .workspace { display: block; min-height: 0; background: white; }
   .workspace-sidebar { display: none !important; }
 }
+
+.workspace-user { margin-inline-start: auto; font-weight: 700; overflow-wrap: anywhere; }
+.metric-link { display: block; width: fit-content; margin-top: .6rem; }
+.property-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: .8rem; }
+.invoice-filter { display: flex; align-items: center; gap: .5rem; margin: .65rem 0; }
+.invoice-filter input { width: auto; min-height: initial; margin: 0; }

@@ -81,7 +81,7 @@ export class RentalController {
         return { ...roomData, occupantCount: movedIn && !movedOut ? lease.tenants.length : 0, activeLeaseCount: room.leases.length };
       }),
     }));
-    return { actor, properties: roomProperties, leases: actor.role === 'STAFF' ? leases.map(row => ({ ...row, rentAmount: null, depositAgreed: null, depositReceived: null })) : leases, invoices, notifications, tenants };
+    return { actor, demo: process.env.RENTFLOW_V10_DEMO === '1' && process.env.NODE_ENV !== 'production', properties: roomProperties, leases: actor.role === 'STAFF' ? leases.map(row => ({ ...row, rentAmount: null, depositAgreed: null, depositReceived: null })) : leases, invoices, notifications, tenants };
   }
 
   private async remindDue(userId: string) {

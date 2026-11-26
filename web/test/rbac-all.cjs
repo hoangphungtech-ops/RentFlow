@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { mkdir } = require('node:fs/promises');
 const { join } = require('node:path');
 const { chromium } = require('playwright-core');
+const { randomUUID } = require('node:crypto');
+const fullUiFlows = require('./full-ui-flows.cjs');
 
 const origin = process.env.RENTFLOW_TEST_ORIGIN ?? 'http://127.0.0.1:32512';
 const password = process.env.DEMO_PASSWORD;
@@ -37,6 +39,21 @@ async function main() {
       await login.click();
       await page.waitForURL('**/' + portal + '/dashboard', { timeout: 10000 });
       await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor({ timeout: 12000 });
+      if (account === 'testchutro') {
+        await page.getByRole('button', { name: 'Xem phòng trống', exact: true }).click();
+        assert.equal(await page.getByLabel('Trạng thái phòng', { exact: true }).inputValue(), 'AVAILABLE');
+        const site = page.getByLabel('Cơ sở và địa chỉ');
+        assert.equal(await site.locator('optgroup[label="Bình Thạnh"]').count(), 1);
+        await site.selectOption({ index: 1 });
+        await page.getByRole('heading', { name: 'Khu trọ Minh', exact: true }).waitFor();
+        await page.getByText('Địa chỉ trong bản demo là dữ liệu minh họa.').waitFor();
+        if (images) await page.screenshot({ path: join(images, '08-co-so-va-phong-trong.png') });
+        console.log('PASS owner room metric opens filtered inventory grouped by address');
+      }
+      for (const width of [360, 768, 1366]) {
+        await page.setViewportSize({ width, height: 900 });
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), portal + ' overflows at ' + width);
+      }
       if (images && !captured.has(portal)) {
         await page.screenshot({ path: join(images, portal + '.png') });
         captured.add(portal);
@@ -76,8 +93,9 @@ async function main() {
     console.log('PASS isolated property lists, renter ledger overview, staff finance restriction and admin/manager API guards');
     const renter2 = await overview('testnguoidung2');
     assert.equal((await api('testnguoidung').get(origin + '/api/leases/' + renter2.leases[0].id + '/ledger')).status(), 404);
+    const ticketTitle = 'Kiểm tra bảo trì ' + randomUUID().slice(0, 8);
     const ticketResponse = await api('testnguoidung').post(origin + '/api/v10/user/leases/' + renter.leases[0].id + '/maintenance', {
-      data: { title: 'Kiểm tra bàn giao bảo trì', description: 'Yêu cầu từ bộ kiểm thử demo.' },
+      data: { title: ticketTitle, description: 'Yêu cầu từ bộ kiểm thử demo.' },
     });
     assert(ticketResponse.ok(), await ticketResponse.text());
     const ticket = await ticketResponse.json();
@@ -95,6 +113,9 @@ async function main() {
     const userDesk = await (await api('testnguoidung').get(origin + '/api/v10/user')).json();
     assert(userDesk.maintenance.some(row => row.id === ticket.id && row.status === 'DONE'));
     console.log('PASS renter lease isolation, maintenance assignment scope, staff progress and renter status');
+    if (process.env.RENTFLOW_FULL_UI === '1') {
+      await fullUiFlows({ origin, contexts, images, owner, renter, renter2, ticket, ticketTitle });
+    }
     const logout = await api('testnguoidung').post(origin + '/api/logout', { data: {} });
     assert(logout.ok());
     assert.equal((await api('testnguoidung').get(origin + '/api/v10/me')).status(), 401);

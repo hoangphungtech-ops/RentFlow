@@ -26,6 +26,7 @@ type Ledger = Lease & {
   settlement: { received: string; deduction: string; debtOffset: string; refund: string; reason: string; invoiceId?: string } | null
 }
 export type Overview = {
+  demo?: boolean
   actor: { fullName: string; role: string; email: string; username: string | null }; tenants: Person[]; leases: Lease[]; invoices: (Invoice & { _count: { payments: number } })[];
   properties: { id: string; name: string; address: string; rooms: Room[]; utilityRates: { id: string; serviceName: string; unitPrice: string; unit: string; effectiveFrom: string }[] }[];
   notifications: { id: string; message: string }[]
@@ -53,6 +54,8 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
   const [ledger, setLedger] = useState<Ledger>()
   const [current, setCurrent] = useState('')
   const [tab, setTab] = useState('Tổng quan')
+  const [roomStatus, setRoomStatus] = useState('')
+  const [debtOnly, setDebtOnly] = useState(false)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -144,7 +147,9 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
   const portalLabels = { user: 'Cổng người thuê', owner: 'Cổng chủ trọ', manager: 'Cổng quản lý khu trọ', staff: 'Cổng nhân viên', accountant: 'Cổng kế toán' }
   const activePortal = portal ?? (renter ? 'user' : 'owner')
   const tabs = tabsByPortal[activePortal]
-  function selectTab(item: string) {
+  function selectTab(item: string, status = '', onlyDebt = false) {
+    setRoomStatus(status)
+    setDebtOnly(onlyDebt)
     setTab(item)
     setLedger(undefined)
     setCurrent('')
@@ -154,9 +159,9 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
   }
   return <>
     <div className={portal ? 'workspace' : undefined}>
-    {portal && <PortalSidebar label={portalLabels[portal]} sections={overview ? tabs : []} active={tab} onSelect={selectTab} />}
+    {portal && <PortalSidebar label={portalLabels[portal]} sections={overview ? tabs : []} active={tab} onSelect={item => selectTab(item)} />}
     <div className="workspace-content">
-    <header className="mast"><Link href="/" className="brand">RentFlow</Link>{signedIn && <button className="ghost" onClick={async () => {
+    <header className="mast"><Link href="/" className="brand">RentFlow</Link>{overview && <span className="workspace-user">{overview.actor.fullName}</span>}{signedIn && <button className="ghost" onClick={async () => {
       try { await api('logout', token, {}) }
       catch (error) { if (!(error instanceof ApiError && error.status === 401)) { setError((error as Error).message); return } }
       signOut()
@@ -176,19 +181,29 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
         {!portal && <nav aria-label="Quản lý">{tabs.map(item => <button key={item} aria-current={tab === item ? 'page' : undefined} onClick={() => selectTab(item)}>{item}</button>)}</nav>}
         <h1>{tab}</h1>
         {portal && portal !== 'accountant' && <PortalSection key={tab} tab={tab} role={portal === 'user' ? 'user' : 'manager'} overview={overview} refresh={refresh} />}
-        <p className="muted">{overview.actor.fullName}</p>
         {tab === 'Cài đặt' && <AccountSettings actor={overview.actor} properties={overview.properties} tenants={overview.tenants} signedOut={signOut} />}
         {tab === 'Tổng quan' && <>
           <div className="tiles">
-            {!renter && <><article><h2>Tổng số phòng</h2><strong>{rooms.length}</strong></article>
-            <article><h2>Phòng đang thuê</h2><strong>{rooms.filter(room => room.status === 'OCCUPIED').length}</strong></article>
-            <article><h2>Phòng trống</h2><strong>{rooms.filter(room => room.status === 'AVAILABLE').length}</strong></article></>}
-            <article><h2>Công nợ</h2><strong>{vnd(unpaid.reduce((sum, row) => sum + Number(row.remainingAmount), 0))}</strong></article>
+            {tabs.includes('Khu trọ & phòng') && [
+              { title: 'Tổng số phòng', status: '' },
+              { title: 'Phòng đang thuê', status: 'OCCUPIED' },
+              { title: 'Phòng trống', status: 'AVAILABLE' },
+            ].map(item => <article key={item.title}>
+              <h2>{item.title}</h2>
+              <strong>{item.status ? rooms.filter(room => room.status === item.status).length : rooms.length}</strong>
+              <button className="ghost metric-link" onClick={() => selectTab('Khu trọ & phòng', item.status)}>Xem {item.title.toLowerCase()}</button>
+            </article>)}
+            {tabs.includes('Hóa đơn & thanh toán') && <article><h2>Công nợ</h2>
+              <strong>{vnd(unpaid.reduce((sum, row) => sum + invoiceBalance(row), 0))}</strong>
+              <button className="ghost metric-link" onClick={() => selectTab('Hóa đơn & thanh toán', '', true)}>Xem hóa đơn còn nợ</button>
+            </article>}
+            {!rooms.length && renter && <article><h2>Tìm phòng</h2><button className="ghost" onClick={() => selectTab('Tìm phòng')}>Xem phòng đang nhận yêu cầu</button></article>}
+            {role === 'STAFF' && <article><h2>Công việc bảo trì</h2><button className="ghost" onClick={() => selectTab('Bảo trì')}>Xem việc được giao</button></article>}
           </div>
           <section aria-labelledby="tasks-title">
             <h2 id="tasks-title">Việc cần xử lý</h2>
             <div className="task-grid">
-              <article className="card">
+              {role !== 'STAFF' && <article className="card">
                 <h3>{overdue.length} hóa đơn quá hạn</h3>
                 {overdue.length ? <p><strong>{vnd(overdue.reduce((sum, row) => sum + invoiceBalance(row), 0))}</strong> cần đối chiếu</p> : <p className="muted">Không có khoản quá hạn.</p>}
                 {overdue.length > 0 && <details open><summary>Xem từng hóa đơn</summary>
@@ -197,7 +212,7 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
                     <button type="button" className="ghost" onClick={() => open(invoice.leaseId, true, invoice.id)}>Xem sổ</button>
                   </div>)}
                 </details>}
-              </article>
+              </article>}
               {canConfirm && <article className="card">
                 <h3>{pending.reduce((sum, invoice) => sum + invoice._count.payments, 0)} khoản chờ xác nhận</h3>
                 <p className="muted">{pending.length ? 'Đối chiếu giao dịch hoặc tiền mặt thực nhận.' : 'Không có khoản chờ xác nhận.'}</p>
@@ -219,25 +234,27 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
             </div>
           </section>
         </>}
-        {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} refresh={refresh} owner={role === 'OWNER' || role === 'MANAGER'} />}
+        {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} refresh={refresh} owner={role === 'OWNER' || role === 'MANAGER'} initialStatus={roomStatus}
+          demo={overview.demo} invoices={role === 'STAFF' ? undefined : unpaid} leases={overview.leases} />}
         {tab === 'Người thuê' && <ul>{overview.tenants.map(person => <li key={person.id}>{person.fullName}</li>)}</ul>}
         {tab === 'Điện nước' && overview.properties.map(property => <section key={property.id} className="card"><h2>{property.name}</h2>{property.utilityRates.map(rate =>
           <p key={rate.id}>{rate.serviceName} · {vnd(rate.unitPrice)}/{rate.unit} · {date(rate.effectiveFrom)}</p>)}</section>)}
         {tab === 'Thông báo' && (overview.notifications.length ? <ul>{overview.notifications.map(row => <li key={row.id}>{row.message}</li>)}</ul> : <p>Chưa có thông báo.</p>)}
         {tab === 'Hóa đơn & thanh toán' && <section aria-label="Bảng kê hóa đơn">
           <h2>Bảng kê hóa đơn</h2>
+          <label className="invoice-filter"><input type="checkbox" checked={debtOnly} onChange={event => setDebtOnly(event.target.checked)} /> Chỉ xem hóa đơn còn nợ</label>
           {canConfirm && <button className="ghost" onClick={downloadInvoiceReport}>Xuất bảng kê CSV</button>}
-          {overview.invoices.length ? <div className="table-wrap"><table className="invoice-table"><thead><tr>
+          {(debtOnly ? unpaid : overview.invoices).length ? <div className="table-wrap"><table className="invoice-table"><thead><tr>
             <th scope="col">Phòng · Kỳ</th><th scope="col">Tổng tiền</th><th scope="col">Đã thu</th><th scope="col">Còn nợ</th><th scope="col">Trạng thái</th><th scope="col">Chi tiết</th>
-          </tr></thead><tbody>{overview.invoices.map(invoice => {
+          </tr></thead><tbody>{(debtOnly ? unpaid : overview.invoices).map(invoice => {
             const lease = overview.leases.find(row => row.id === invoice.leaseId)
-            return <tr key={invoice.id}><th scope="row">{lease?.room.roomCode} · {invoice.billingPeriod}</th>
+            return <tr id={'invoice-row-' + invoice.id} key={invoice.id}><th scope="row">{lease?.room.roomCode} · {invoice.billingPeriod}</th>
               <td>{vnd(invoice.totalAmount)}</td><td>{vnd(invoice.paidAmount)}</td><td>{vnd(invoiceBalance(invoice))}</td><td><InvoiceBadge status={invoice.status} /></td>
               <td><button type="button" className="ghost" onClick={() => open(invoice.leaseId, true, invoice.id)}>Xem sổ</button></td>
             </tr>
           })}</tbody></table></div> : <p>Chưa có hóa đơn.</p>}
         </section>}
-        {tab === 'Tổng quan' && <section><h2>Hóa đơn còn nợ</h2>
+        {tab === 'Tổng quan' && role !== 'STAFF' && <section><h2>Hóa đơn còn nợ</h2>
           {unpaid.length ? unpaid.map(invoice => {
             const lease = overview.leases.find(row => row.id === invoice.leaseId)
             return <div key={invoice.id} className="unpaid-row"><span>{lease?.room.roomCode} · {lease?.tenants.find(row => row.representative)?.tenant.fullName} · {invoice.billingPeriod} · <strong>{vnd(invoice.remainingAmount)}</strong> · hạn {date(invoice.dueDate)}</span><button type="button" className="ghost no-print" onClick={() => open(invoice.leaseId, true, invoice.id)}>Xem sổ</button></div>

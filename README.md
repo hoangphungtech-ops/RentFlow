@@ -75,3 +75,7 @@ Tài khoản đã được xác minh qua API có tại [docs/DEMO_ACCOUNTS.md](d
 ## Demo phân quyền với 18 tài khoản
 
 Xem [tài khoản, sáu cổng và hướng dẫn kiểm thử](docs/RBAC_ALL_ACCOUNTS.md) để chạy bản V10 mở rộng.
+
+## Demo sáu cổng làm việc
+
+[Xem hướng dẫn chạy, tài khoản và kiểm thử giao diện](docs/FULL_UI_DEMO.md).

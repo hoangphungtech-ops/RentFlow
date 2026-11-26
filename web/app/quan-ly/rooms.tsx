@@ -44,23 +44,50 @@ function RoomHistory({ id, code, statuses, openLease, room, owner, refresh }: {
 
 type RoomPhotoInfo = { id: string; alt: string; sizeBytes: number; width: number; height: number; isPrimary: boolean }
 
-export function RoomList({ properties, statuses, openLease, refresh, owner }: {
-  properties: Overview['properties']; statuses: Record<string,string>; openLease: (id: string) => void; refresh: () => Promise<void>; owner: boolean
+export function RoomList({ properties, statuses, openLease, refresh, owner, initialStatus = '', demo, invoices, leases = [] }: {
+  properties: Overview['properties']; statuses: Record<string,string>; openLease: (id: string) => void; refresh: () => Promise<void>; owner: boolean; initialStatus?: string
+  demo?: boolean; invoices?: Overview['invoices']; leases?: Overview['leases']
 }) {
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
-  const matches = properties.map(property => ({ ...property, rooms: property.rooms.filter(room =>
+  const [status, setStatus] = useState(initialStatus)
+  const [site, setSite] = useState('')
+  const leaseProperties = new Map(leases.map(lease => [lease.id, lease.room.propertyId]))
+  const debtBySite = new Map<string, number>()
+  for (const invoice of invoices ?? []) {
+    const propertyId = leaseProperties.get(invoice.leaseId)
+    if (propertyId) debtBySite.set(propertyId, (debtBySite.get(propertyId) ?? 0) + Number(invoice.remainingAmount))
+  }
+  const groups = new Map<string, typeof properties>()
+  for (const property of properties) {
+    const area = ['Bình Thạnh', 'Phú Nhuận'].find(name => matchesVietnameseSearch(property.address, name)) ?? 'Khu vực khác'
+    const group = groups.get(area) ?? []
+    group.push(property)
+    groups.set(area, group)
+  }
+  const matches = properties.filter(property => !site || property.id === site).map(property => ({ ...property, rooms: property.rooms.filter(room =>
     (!status || room.status === status) &&
-    matchesVietnameseSearch(room.roomCode + ' ' + property.name, search),
+    matchesVietnameseSearch(room.roomCode + ' ' + property.name + ' ' + property.address, search),
   ) })).filter(property => property.rooms.length)
   return <>
-    <label>Tìm phòng<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Mã phòng hoặc tên khu" /></label>
+    <div className="property-filters">
+    <label>Cơ sở và địa chỉ<select value={site} onChange={event => setSite(event.target.value)}>
+      <option value="">Tất cả cơ sở trong phạm vi</option>
+      {Array.from(groups, ([area, sites]) => <optgroup key={area} label={area}>
+        {sites.map(property => <option key={property.id} value={property.id}>{property.name} · {property.address}</option>)}
+      </optgroup>)}
+    </select></label>
+    <label>Tìm phòng<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Mã phòng, tên khu, đường hoặc số nhà" /></label>
     <label>Trạng thái phòng<select aria-label="Trạng thái phòng" value={status} onChange={event => setStatus(event.target.value)}>
       <option value="">Tất cả trạng thái</option>
       {['AVAILABLE','OCCUPIED','MAINTENANCE'].map(value => <option key={value} value={value}>{statuses[value]}</option>)}
     </select></label>
+    </div>
+    {demo && <p className="muted">Địa chỉ trong bản demo là dữ liệu minh họa.</p>}
     {!matches.length && <p role="status">Không có phòng phù hợp.</p>}
     {matches.map(property => <section key={property.id} className="card"><h2>{property.name}</h2><p>{property.address}</p>
+      <p>{properties.find(row => row.id === property.id)?.rooms.filter(room => room.status === 'AVAILABLE').length ?? 0} phòng trống
+        {invoices && <> · Công nợ {vnd(debtBySite.get(property.id) ?? 0)}</>}
+      </p>
       {property.rooms.map(room => <div key={room.id}><p>
         <strong>{room.roomCode}</strong> · {statuses[room.status]} · {vnd(room.baseRentPrice)}/tháng<br />
         Sức chứa: {room.maxOccupants} người · Đang ở (đã bàn giao): {room.occupantCount} người
