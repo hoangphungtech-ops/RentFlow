@@ -48,7 +48,7 @@ async function main() {
         console.log('PASS renter lands directly on listing gallery with accent-insensitive search');
       }
       if (account === 'testchutro') {
-        await page.getByRole('heading', { name: 'Doanh thu sáu tháng' }).waitFor();
+        await page.getByRole('heading', { name: 'Doanh thu 12 tháng' }).waitFor();
         if (images) await page.screenshot({ path: join(images, 'owner-operations.png') });
 
         await page.getByRole('button', { name: 'Xem phòng trống', exact: true }).click();

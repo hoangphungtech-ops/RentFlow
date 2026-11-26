@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import { api, vnd } from '../shared'
 
 type Metrics = {
+    year: number
+  currentMonth: number
+  yearlyRevenue: string
   months: { period: string; total: string }[]
   openRepairs: number
   recent: {
@@ -18,14 +21,29 @@ export function OwnerOperations({ occupied, total, available, unpaid, balance, o
 }) {
   const [metrics, setMetrics] = useState<Metrics>()
   const [error, setError] = useState('')
+  const [selectedYear, setSelectedYear] = useState('')
+  const [history, setHistory] = useState<Metrics>()
+  const [historyError, setHistoryError] = useState('')
   useEffect(() => {
     let active = true
     void api<Metrics>('v10/owner/operations').then(data => { if (active) setMetrics(data) })
       .catch(failure => { if (active) setError(failure.message) })
     return () => { active = false }
   }, [])
-  const latest = metrics?.months.at(-1)
-  const peak = Math.max(1, ...(metrics?.months.map(row => Number(row.total)) ?? []))
+  useEffect(() => {
+    if (!metrics || !selectedYear || Number(selectedYear) === metrics.year) return
+    let active = true
+    void api<Metrics>('v10/owner/operations?year=' + encodeURIComponent(selectedYear))
+      .then(data => { if (active) setHistory(data) })
+      .catch(failure => { if (active) setHistoryError(failure.message) })
+    return () => { active = false }
+  }, [selectedYear, metrics?.year])
+  const historical = !!metrics && !!selectedYear && Number(selectedYear) !== metrics.year
+  const chartMetrics = historical ? (history?.year === Number(selectedYear) ? history : undefined) : metrics
+  const latest = metrics?.months.find(
+    row => Number(row.period.slice(-2)) === metrics.currentMonth
+  )
+
   return <>
     <p className="rental-subtitle">Theo dõi thu chi, tình trạng phòng và việc cần xử lý.</p>
     {error && <p role="alert">{error}</p>}
@@ -40,13 +58,25 @@ export function OwnerOperations({ occupied, total, available, unpaid, balance, o
         <button className="ghost metric-link" onClick={() => onOpen('Bảo trì')}>Xem bảo trì</button></article>
     </div>
     <div className="owner-panels">
-      <section className="card"><h2>Doanh thu sáu tháng</h2>
-        <p className="muted">Các khoản thu đã xác nhận · VNĐ</p>
-        {metrics && <ol className="owner-bars">{metrics.months.map(row => <li key={row.period}>
-          <small>{new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(Number(row.total))}</small>
-          <span aria-label={vnd(row.total)} className="owner-bar" style={{ height: Math.max(0, Math.round(Number(row.total) / peak * 92)) + 'px' }} />
-          <small>Thg {Number(row.period.slice(-2))}</small>
-        </li>)}</ol>}
+      <section className="card owner-revenue-card">
+        <div className="revenue-heading">
+          <div><h2>Doanh thu 12 tháng</h2><small className="muted">Các khoản thu đã xác nhận · VNĐ</small></div>
+          <label className="revenue-year-select">
+            <select aria-label="Năm doanh thu" disabled={!metrics} value={selectedYear || String(metrics?.year ?? '')}
+              onChange={event => { setHistory(undefined); setHistoryError(''); setSelectedYear(event.target.value) }}>
+              {!metrics && <option value="">Đang tải</option>}
+              {metrics && Array.from({ length: Math.max(1, metrics.year - 1999) }, (_, i) => metrics.year - i)
+                .map(year => <option key={year} value={year}>Năm {year}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="yearly-revenue">
+          <p>Tổng doanh thu năm {selectedYear || metrics?.year || '—'}</p>
+          <strong>{chartMetrics ? vnd(chartMetrics.yearlyRevenue) : '—'}</strong>
+        </div>
+        {historical && historyError && <p role="alert">{historyError}</p>}
+        {!chartMetrics && !historyError && !error && <p role="status">Đang tải doanh thu…</p>}
+        {chartMetrics && <RevenueChart data={chartMetrics} currentYear={metrics?.year} />}
       </section>
       <section className="card"><h2>Hoạt động gần đây</h2>
         {!metrics && !error && <p role="status">Đang tải hoạt động…</p>}
@@ -57,5 +87,44 @@ export function OwnerOperations({ occupied, total, available, unpaid, balance, o
         </li>)}</ul>
       </section>
     </div>
+  </>
+}
+
+
+function RevenueChart({ data, currentYear }: { data: Metrics; currentYear?: number }) {
+  const amounts = data.months.map(row => Number(row.total))
+  const peak = Math.max(0, ...amounts)
+  const rough = (peak || 4000000) / 4
+  const unit = Math.pow(10, Math.floor(Math.log10(rough)))
+  const step = ( [1, 2, 2.5, 5, 10].find(value => value * unit >= rough) ?? 10 ) * unit
+  const max = step * 4
+  const compact = new Intl.NumberFormat('vi-VN', { notation: 'compact', maximumFractionDigits: 1 })
+  const left = 65, bottom = 174, top = 20, width = 640, plotHeight = bottom - top
+  const spacing = width / 12
+  return <>
+    <div className="revenue-chart-scroll">
+      <svg className="revenue-svg" viewBox="0 0 720 205" role="img" aria-label={'Biểu đồ doanh thu năm ' + data.year}>
+        {[0, 1, 2, 3, 4].map(i => {
+          const y = bottom - i * plotHeight / 4
+          return <g key={i}>
+            <text x={left - 9} y={y + 4} textAnchor="end" className="revenue-tick">{compact.format(i * step)}</text>
+          </g>
+        })}
+        {data.months.map((row, i) => {
+          const amount = Number(row.total)
+          const month = Number(row.period.slice(-2))
+          const x = left + (i + .5) * spacing
+          const height = Math.max(2, Math.max(0, amount) / max * plotHeight)
+          const current = data.year === currentYear && month === data.currentMonth
+          return <g key={row.period} className="revenue-column">
+            <title>{`Tháng ${month}/${data.year}: ${vnd(row.total)}`}</title>
+            <rect x={x - 17} y={bottom - height} width={34} height={height} rx={Math.min(3, height / 2)} fill={current ? '#167354' : '#a6d8c5'} />
+            <text x={x} y={bottom - height - 6} textAnchor="middle" className="revenue-tick">{compact.format(amount)}</text>
+            <text x={x} y={bottom + 18} textAnchor="middle" className="revenue-tick">T{month}</text>
+          </g>
+        })}
+      </svg>
+    </div>
+    <div className="revenue-legend"><span><i className="revenue-swatch current" />Tháng hiện tại</span><span><i className="revenue-swatch" />Các tháng khác</span></div>
   </>
 }

@@ -117,17 +117,22 @@ export class RentFlowV10Controller {
   }
 
   @Get('owner/operations')
-  async ownerOperations(@Req() { actor }: SessionRequest) {
+  async ownerOperations(@Req() { actor }: SessionRequest, @Query('year') requestedYear?: string) {
     allow(actor, 'OWNER');
     const scope = leaseScope(actor);
     const zone = 'Asia/Ho_Chi_Minh';
     const formatter = new Intl.DateTimeFormat('sv-SE', { timeZone: zone, year: 'numeric', month: '2-digit' });
-    const [year, month] = formatter.format(new Date()).split('-').map(Number);
-    const periods = Array.from({ length: 6 }, (_, index) =>
-      new Date(Date.UTC(year, month - 6 + index, 1)).toISOString().slice(0, 7));
-    const since = new Date(periods[0] + '-01T00:00:00+07:00');
+    const [currentYear, month] = formatter.format(new Date()).split('-').map(Number);
+    const year = requestedYear === undefined ? currentYear :
+      parse(z.coerce.number().int().min(2000).max(currentYear), requestedYear);
+
+const periods = Array.from({ length: 12 }, (_, index) =>
+  `${year}-${String(index + 1).padStart(2, '0')}`);
+
+const since = new Date(`${year}-01-01T00:00:00+07:00`);
+const until = new Date(`${year + 1}-01-01T00:00:00+07:00`);
     const [payments, openRepairs, recent] = await Promise.all([
-      db.payment.findMany({ where: { status: 'CONFIRMED', method: { not: 'DEPOSIT' }, confirmedAt: { gte: since }, invoice: { lease: scope } }, select: { amount: true, confirmedAt: true } }),
+      db.payment.findMany({ where: { status: 'CONFIRMED', method: { not: 'DEPOSIT' }, confirmedAt: { gte: since, lt: until  }, invoice: { lease: scope } }, select: { amount: true, confirmedAt: true } }),
       db.maintenanceRequest.count({ where: { lease: scope, status: { not: 'DONE' } } }),
       db.payment.findMany({
         where: { status: { in: ['CONFIRMED', 'PENDING'] }, invoice: { lease: scope } },
@@ -142,7 +147,22 @@ export class RentFlowV10Controller {
       const current = totals.get(key);
       if (current) totals.set(key, current.add(payment.amount));
     }
-    return { months: periods.map(period => ({ period, total: totals.get(period) })), openRepairs, recent };
+    const yearlyRevenue = [...totals.values()].reduce(
+  (sum, value) => sum.add(value),
+  new Prisma.Decimal(0)
+);
+
+return {
+  year,
+  currentMonth: month,
+  yearlyRevenue: yearlyRevenue.toString(),
+  months: periods.map(period => ({
+    period,
+    total: totals.get(period)
+  })),
+  openRepairs,
+  recent
+};
   }
 
   @Get('manager')
