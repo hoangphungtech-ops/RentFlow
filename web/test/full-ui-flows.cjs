@@ -4,9 +4,9 @@ const { randomUUID } = require('node:crypto');
 const { readFile } = require('node:fs/promises');
 const { join } = require('node:path');
 
-module.exports = async function fullUiFlows({ origin, contexts, images, owner, renter, renter2, ticket, ticketTitle }) {
+module.exports = async function fullUiFlows({ origin, contexts, api, images, owner, renter, renter2, ticket, ticketTitle }) {
   async function send(user, path, options = {}) {
-    const response = await contexts.get(user).request.fetch(origin + '/api/' + path, options);
+    const response = await api(user).fetch(origin + '/api/' + path, options);
     assert.equal(response.status(), options.expected ?? (options.method === 'POST' ? 201 : 200), path + ' ' + await response.text());
     return response;
   }
@@ -46,10 +46,24 @@ module.exports = async function fullUiFlows({ origin, contexts, images, owner, r
   await screen('testnguoidung', 'user', 'Tìm phòng', async page => {
     const result = page.locator('article').filter({ has: page.getByRole('heading', { name: tag + ' · ' + property.name }) });
     await result.getByRole('button', { name: 'Xem ảnh phòng' }).click();
-    await result.getByRole('img').waitFor();
+    await page.getByRole('dialog').getByRole('img').waitFor();
     await capture(page, '10-tim-phong');
   });
   const booking = await json('testnguoidung', 'v10/listings/' + room.id + '/bookings', { kind: 'VIEW', note: 'Xem phòng demo' });
+  const thread = 'v10/bookings/' + booking.id + '/messages';
+  await json('testnguoidung', thread, { message: 'Cho mình hỏi lịch xem phòng?' });
+  const messages = await json('testquanly', thread);
+  assert.equal(messages[0].body, 'Cho mình hỏi lịch xem phòng?');
+  await json('testquanly', thread, { message: 'Bạn có thể đến chiều thứ bảy.' });
+  assert.equal((await json('testnguoidung', thread)).length, 2);
+  await send('testnguoidung2', thread, { expected: 404 });
+  await send('testquanly2', thread, { method: 'POST', data: { message: 'Ngoài phạm vi' }, expected: 404 });
+  await send('testadmin', thread, { expected: 403 });
+  await screen('testnguoidung', 'user', 'Trao đổi', async page => {
+    await page.getByText('Bạn có thể đến chiều thứ bảy.', { exact: true }).waitFor();
+    await capture(page, 'user-inbox');
+  });
+  console.log('PASS renter and assigned manager exchange booking messages with scope checks');
   await send('testquanly2', 'v10/manager/bookings/' + booking.id, { method: 'POST', data: { approve: true }, expected: 404 });
   await json('testquanly', 'v10/manager/bookings/' + booking.id, { approve: true });
   assert((await json('testnguoidung', 'v10/user')).bookings.some(row => row.id === booking.id && row.status === 'APPROVED'));
@@ -124,7 +138,7 @@ module.exports = async function fullUiFlows({ origin, contexts, images, owner, r
   } finally {
     await json('testadmin', lockPath, { locked: false });
   }
-  const signup = await contexts.get('testnguoidung').request.post(origin + '/api/auth/register', {
+  const signup = await api('testnguoidung').post(origin + '/api/auth/register', {
     data: { email: 'signup-' + tag.toLowerCase() + '@rentflow.test', fullName: 'Tài khoản thử', password: 'Register@20261126', role: 'ADMIN' },
   });
   assert.equal(signup.status(), 400);

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Action, api, field } from '../shared'
+import { Action, api, ApiError, field } from '../shared'
 
 export default function Login() {
   const router = useRouter()
@@ -22,8 +22,15 @@ export default function Login() {
         submit={async data => {
           if (registering) await api('auth/register', '', data)
           await api('login', '', registering ? { identifier: data.email, password: data.password } : data)
-          const { portal } = await api<{portal: string}>('v10/me')
-          router.replace('/' + portal + '/dashboard')
+          try {
+            const { portal } = await api<{portal: string}>('v10/me')
+            router.replace('/' + portal + '/dashboard')
+          } catch (error) {
+            if (error instanceof ApiError && error.status === 401) {
+              throw new Error('Máy chủ chưa nhận được phiên đăng nhập. Hãy thử lại trong tab RentFlow và kiểm tra trình duyệt cho phép cookie của trang.')
+            }
+            throw error
+          }
         }} />
       <div className="portal-links"><button className="ghost" onClick={() => setRegistering(!registering)}>{registering ? 'Quay lại đăng nhập' : 'Đăng ký người thuê'}</button><Link href="/khoi-phuc">Quên mật khẩu?</Link></div>
     </section>

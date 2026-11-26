@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Param, ParseUUIDPipe, Post, Query, Req, Res, StreamableFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Prisma } from '@prisma/client';
 import { createReadStream } from 'node:fs';
@@ -12,11 +12,11 @@ const managerRoles = ['OWNER', 'MANAGER', 'STAFF'] as const;
 const openListing = { listingStatus: 'PUBLISHED', status: 'AVAILABLE', bookingRequests: { none: { holdFlag: 1 } } } as const;
 const imageSelect = { id: true, alt: true, isPrimary: true } as const;
 const listingSelect = {
-  id: true, roomCode: true, baseRentPrice: true, maxOccupants: true, floorArea: true, amenities: true, status: true, listingStatus: true,
+  id: true, roomCode: true, baseRentPrice: true, maxOccupants: true, floorArea: true, listingTitle: true, amenities: true, status: true, listingStatus: true,
   property: { select: { name: true, address: true, id: true } },
   images: { select: imageSelect, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
 } satisfies Prisma.RoomSelect;
-const bookingLinks = { room: { select: { id: true, roomCode: true, property: { select: { name: true } } } } };
+const bookingLinks = { room: { select: { id: true, roomCode: true, property: { select: { name: true, address: true } } } } };
 const maintenanceLinks = { lease: { select: { id: true, room: { select: { roomCode: true, propertyId: true, property: { select: { name: true } } } } } } };
 
 @Controller('auth')
@@ -34,6 +34,7 @@ export class RentFlowRegistration {
 @Controller('v10')
 export class RentFlowV10Controller {
   @Get('me')
+  @Header('Cache-Control', 'private, no-store')
   me(@Req() { actor }: SessionRequest) {
     return { ...actor, portal: ({ ADMIN: 'admin', OWNER: 'owner', MANAGER: 'manager', STAFF: 'staff', ACCOUNTANT: 'accountant', RENTER: 'user' } as const)[actor.role] };
   }
@@ -115,6 +116,35 @@ export class RentFlowV10Controller {
     });
   }
 
+  @Get('owner/operations')
+  async ownerOperations(@Req() { actor }: SessionRequest) {
+    allow(actor, 'OWNER');
+    const scope = leaseScope(actor);
+    const zone = 'Asia/Ho_Chi_Minh';
+    const formatter = new Intl.DateTimeFormat('sv-SE', { timeZone: zone, year: 'numeric', month: '2-digit' });
+    const [year, month] = formatter.format(new Date()).split('-').map(Number);
+    const periods = Array.from({ length: 6 }, (_, index) =>
+      new Date(Date.UTC(year, month - 6 + index, 1)).toISOString().slice(0, 7));
+    const since = new Date(periods[0] + '-01T00:00:00+07:00');
+    const [payments, openRepairs, recent] = await Promise.all([
+      db.payment.findMany({ where: { status: 'CONFIRMED', method: { not: 'DEPOSIT' }, confirmedAt: { gte: since }, invoice: { lease: scope } }, select: { amount: true, confirmedAt: true } }),
+      db.maintenanceRequest.count({ where: { lease: scope, status: { not: 'DONE' } } }),
+      db.payment.findMany({
+        where: { status: { in: ['CONFIRMED', 'PENDING'] }, invoice: { lease: scope } },
+        select: { id: true, status: true, amount: true, createdAt: true, confirmedAt: true, invoice: { select: { lease: { select: { room: { select: { roomCode: true } } } } } } },
+        orderBy: [{ confirmedAt: 'desc' }, { createdAt: 'desc' }], take: 6,
+      }),
+    ]);
+    const totals = new Map(periods.map(period => [period, new Prisma.Decimal(0)]));
+    for (const payment of payments) {
+      if (!payment.confirmedAt) continue;
+      const key = formatter.format(payment.confirmedAt);
+      const current = totals.get(key);
+      if (current) totals.set(key, current.add(payment.amount));
+    }
+    return { months: periods.map(period => ({ period, total: totals.get(period) })), openRepairs, recent };
+  }
+
   @Get('manager')
   async manager(@Req() { actor }: SessionRequest) {
     allow(actor, ...managerRoles);
@@ -146,10 +176,10 @@ export class RentFlowV10Controller {
   @Post('manager/rooms/:id/listing')
   async publish(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) roomId: string, @Body() body: unknown) {
     allow(actor, 'OWNER', 'MANAGER', 'STAFF');
-    const { floorArea, amenities } = parse(z.object({ floorArea: z.number().min(1).max(10000), amenities: label(500).optional() }).strict(), body);
+    const { floorArea, amenities, listingTitle } = parse(z.object({ listingTitle: label(150).optional(), floorArea: z.number().min(1).max(10000), amenities: label(500).optional() }).strict(), body);
     return atomic(async tx => {
       found(await tx.room.findFirst({ where: { id: roomId, property: propertyScope(actor) } }));
-      const result = await tx.room.update({ where: { id: roomId }, data: { floorArea, amenities: amenities ?? null, listingStatus: 'PENDING' }, select: listingSelect });
+      const result = await tx.room.update({ where: { id: roomId }, data: { floorArea, amenities: amenities ?? null, listingTitle, listingStatus: 'PENDING' }, select: listingSelect });
       await audit(tx, actor, 'ROOM_LISTING_SUBMITTED', roomId);
       return result;
     });
@@ -158,8 +188,8 @@ export class RentFlowV10Controller {
   @Get('listings')
   async search(@Req() { actor }: SessionRequest, @Query() query: unknown) {
     allow(actor, 'RENTER');
-    const { area, max } = parse(z.object({ area: z.string().trim().max(120).optional(), max: z.coerce.number().int().min(0).max(9999999999).optional() }), query);
-    return db.room.findMany({ where: { ...openListing, property: area ? { OR: [{ name: { contains: area } }, { address: { contains: area } }] } : undefined, baseRentPrice: max === undefined ? undefined : { lte: max } }, select: listingSelect, take: 100 });
+    const { area, max, catalogue } = parse(z.object({ catalogue: z.literal('1').optional(), area: z.string().trim().max(120).optional(), max: z.coerce.number().int().min(0).max(9999999999).optional() }), query);
+    return db.room.findMany({ where: { ...(catalogue ? { listingStatus: 'PUBLISHED', bookingRequests: { none: { holdFlag: 1 } } } as const : openListing), property: area ? { OR: [{ name: { contains: area } }, { address: { contains: area } }] } : undefined, baseRentPrice: max === undefined ? undefined : { lte: max } }, select: listingSelect, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 100 });
   }
 
   @Get('listings/:id')
@@ -170,7 +200,7 @@ export class RentFlowV10Controller {
 
   @Get('listing-photos/:room/:photo')
   async listingPhoto(@Req() { actor }: SessionRequest, @Param('room', ParseUUIDPipe) roomId: string, @Param('photo', ParseUUIDPipe) photoId: string, @Res({ passthrough: true }) response: Response) {
-    const scope = actor.role === 'ADMIN' ? {} : actor.role === 'RENTER' ? openListing : { property: propertyScope(actor) };
+    const scope = actor.role === 'ADMIN' ? {} : actor.role === 'RENTER' ? { listingStatus: 'PUBLISHED' as const, bookingRequests: { none: { holdFlag: 1 } } } : { property: propertyScope(actor) };
     const image = found(await db.roomImage.findFirst({ where: { id: photoId, roomId, room: scope } }));
     response.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
     return new StreamableFile(createReadStream(imagePath(image.storageKey)), { type: image.mimeType, disposition: 'inline' });
@@ -196,6 +226,37 @@ export class RentFlowV10Controller {
       requireCondition(!await tx.bookingRequest.findFirst({ where: { roomId, userId: actor.id, kind: data.kind, status: { in: ['PENDING', 'APPROVED', 'CONFIRMED'] } } }), 'Bạn đã có yêu cầu đang xử lý.');
       return tx.bookingRequest.create({ data: { ...data, roomId, userId: actor.id } });
     });
+  }
+
+  @Get('bookings/:id/messages')
+  async bookingMessages(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) bookingId: string) {
+    const scope = this.bookingConversationScope(actor);
+    found(await db.bookingRequest.findFirst({ where: { id: bookingId, ...scope }, select: { id: true } }));
+    const messages = await db.bookingMessage.findMany({
+      where: { bookingId, booking: scope },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 100,
+      select: { id: true, body: true, createdAt: true, author: { select: { fullName: true } } },
+    });
+    return messages.reverse();
+  }
+
+  @Post('bookings/:id/messages')
+  async sendBookingMessage(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) bookingId: string, @Body() body: unknown) {
+    const scope = this.bookingConversationScope(actor);
+    const { message } = parse(z.object({ message: label(1000) }).strict(), body);
+    return atomic(async tx => {
+      found(await tx.bookingRequest.findFirst({ where: { id: bookingId, ...scope }, select: { id: true } }));
+      return tx.bookingMessage.create({
+        data: { bookingId, authorId: actor.id, body: message },
+        select: { id: true, body: true, createdAt: true, author: { select: { fullName: true } } },
+      });
+    });
+  }
+
+  private bookingConversationScope(actor: SessionRequest['actor']): Prisma.BookingRequestWhereInput {
+    allow(actor, 'RENTER', 'OWNER', 'MANAGER');
+    return actor.role === 'RENTER' ? { userId: actor.id } : { room: { property: propertyScope(actor) } };
   }
 
   @Post('manager/bookings/:id')

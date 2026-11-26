@@ -27,7 +27,7 @@ async function main() {
   const captured = new Set();
   try {
     for (const [account, portal] of Object.entries(accounts)) {
-      const context = await browser.newContext({ viewport: { width: 1366, height: 900 }, extraHTTPHeaders: { 'X-RentFlow-Web': '1' } });
+      const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
       contexts.set(account, context);
       const page = await context.newPage();
       await page.goto(origin + '/login');
@@ -38,8 +38,19 @@ async function main() {
       await page.locator('input[name=password]').fill(password);
       await login.click();
       await page.waitForURL('**/' + portal + '/dashboard', { timeout: 10000 });
-      await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor({ timeout: 12000 });
+      await page.getByRole('heading', { name: portal === 'user' ? 'Tìm phòng phù hợp' : portal === 'owner' ? 'Tổng quan vận hành' : 'Tổng quan', exact: true }).waitFor({ timeout: 12000 });
+      if (account === 'testnguoidung') {
+        await page.getByRole('heading', { name: 'Studio An Bình' }).waitFor();
+        await page.getByLabel('Tìm phòng, tuyến đường, khu vực').fill('studio an binh');
+        await page.getByLabel('Trạng thái phòng').selectOption('AVAILABLE');
+        assert.equal(await page.locator('.rental-grid article').count(), 1);
+        await page.getByLabel('Tìm phòng, tuyến đường, khu vực').clear();
+        console.log('PASS renter lands directly on listing gallery with accent-insensitive search');
+      }
       if (account === 'testchutro') {
+        await page.getByRole('heading', { name: 'Doanh thu sáu tháng' }).waitFor();
+        if (images) await page.screenshot({ path: join(images, 'owner-operations.png') });
+
         await page.getByRole('button', { name: 'Xem phòng trống', exact: true }).click();
         assert.equal(await page.getByLabel('Trạng thái phòng', { exact: true }).inputValue(), 'AVAILABLE');
         const site = page.getByLabel('Cơ sở và địa chỉ');
@@ -53,6 +64,15 @@ async function main() {
       for (const width of [360, 768, 1366]) {
         await page.setViewportSize({ width, height: 900 });
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), portal + ' overflows at ' + width);
+      }
+      if (account === 'testnguoidung') {
+        await page.setViewportSize({ width: 360, height: 780 });
+        await page.getByRole('navigation', { name: 'Điều hướng nhanh người thuê' }).getByRole('button', { name: 'Hóa đơn', exact: true }).click();
+        await page.getByRole('button', { name: 'Xem chi tiết từng khoản' }).waitFor();
+        if (images) await page.screenshot({ path: join(images, 'user-invoice-360.png') });
+        await page.setViewportSize({ width: 1366, height: 900 });
+        await page.getByRole('navigation', { name: 'Quản lý' }).getByRole('button', { name: 'Tìm phòng', exact: true }).click();
+        await page.getByRole('heading', { name: 'Studio An Bình' }).waitFor();
       }
       if (images && !captured.has(portal)) {
         await page.screenshot({ path: join(images, portal + '.png') });
@@ -72,7 +92,16 @@ async function main() {
       await page.close();
     }
     console.log('PASS wrong dashboard denied for all ' + contexts.size + ' accounts');
-    const api = (account) => contexts.get(account).request;
+    const api = account => {
+      const fetch = (url, options) => contexts.get(account).request.fetch(url, {
+        ...options, headers: { ...options?.headers, 'X-RentFlow-Web': '1' },
+      });
+      return {
+        fetch,
+        get: (url, options) => fetch(url, { ...options, method: 'GET' }),
+        post: (url, options) => fetch(url, { ...options, method: 'POST' }),
+      };
+    };
     async function overview(account) {
       const r = await api(account).get(origin + '/api/overview');
       assert.equal(r.status(), 200);
@@ -114,11 +143,22 @@ async function main() {
     assert(userDesk.maintenance.some(row => row.id === ticket.id && row.status === 'DONE'));
     console.log('PASS renter lease isolation, maintenance assignment scope, staff progress and renter status');
     if (process.env.RENTFLOW_FULL_UI === '1') {
-      await fullUiFlows({ origin, contexts, images, owner, renter, renter2, ticket, ticketTitle });
+      await fullUiFlows({ origin, contexts, api, images, owner, renter, renter2, ticket, ticketTitle });
     }
     const logout = await api('testnguoidung').post(origin + '/api/logout', { data: {} });
     assert(logout.ok());
     assert.equal((await api('testnguoidung').get(origin + '/api/v10/me')).status(), 401);
+    const switchPage = await contexts.get('testnguoidung').newPage();
+    await switchPage.goto(origin + '/login');
+    await switchPage.locator('input[name=identifier]').fill('testquanly');
+    await switchPage.locator('input[name=password]').fill(password);
+    await switchPage.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+    await switchPage.waitForURL('**/manager/dashboard');
+    await switchPage.goto(origin + '/user/dashboard');
+    await switchPage.getByRole('heading', { name: 'Không có quyền truy cập' }).waitFor();
+    await switchPage.getByRole('link', { name: 'Về giao diện của bạn' }).click();
+    await switchPage.waitForURL('**/manager/dashboard');
+    console.log('PASS same browser switches from renter to manager and the denied page leads to the correct portal');
     const mobile = await browser.newPage({ viewport: { width: 360, height: 780 } });
     await mobile.goto(origin + '/login');
     await mobile.getByRole('button', { name: 'Đăng nhập', exact: true }).waitFor();

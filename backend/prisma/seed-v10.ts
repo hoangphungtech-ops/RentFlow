@@ -35,9 +35,20 @@ async function seed() {
   ] as const) {
     await db.room.upsert({ where: { id }, update: {}, create: { id, roomCode, status, listingStatus, baseRentPrice: rent, maxOccupants: 2, floorArea: 26, amenities: 'Wi-Fi, gác lửng, bếp nhỏ', propertyId: ids.property } });
   }
+  await db.room.updateMany({ where: { id: ids.listing, listingTitle: null }, data: { listingTitle: 'Studio An Bình' } });
+  for (const [tail, roomCode, listingTitle, status, baseRentPrice] of [
+    [71, 'AB203', 'Phòng gác lửng Nguyễn Xí', 'OCCUPIED', 2900000],
+    [72, 'AB204', 'Studio Nguyễn Xí', 'AVAILABLE', 3400000],
+  ] as const) {
+    const id = 'a9251100-0000-4000-8000-' + String(tail).padStart(12, '0');
+    await db.room.upsert({
+      where: { id }, update: {},
+      create: { id, roomCode, listingTitle, status, baseRentPrice, propertyId: ids.property, maxOccupants: 2, floorArea: 25, listingStatus: 'PUBLISHED' },
+    });
+  }
   const directory = join(resolve(process.env.UPLOAD_DIR || 'uploads'), 'rooms');
   await mkdir(directory, { recursive: true });
-  for (const [roomId, first] of [[ids.listing, 20], [ids.review, 30]] as const) {
+  for (const [roomId, first] of [[ids.listing, 20], [ids.review, 30], ['a9251100-0000-4000-8000-000000000072', 40]] as const) {
     for (const index of [1, 2]) {
       const imageId = 'a9251100-0000-4000-8000-' + String(first + index).padStart(12, '0');
       const storageKey = imageId + '.webp';

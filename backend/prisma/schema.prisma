@@ -46,6 +46,7 @@ model User {
 
   ownedProperties Property[]     @relation("PropertyOwner")
   recordedMeters  MeterReading[] @relation("MeterRecorder")
+  bookingMessages BookingMessage[]
   bookingRequests BookingRequest[]
   maintenanceRequests MaintenanceRequest[]
   ownerApplication OwnerApplication?
@@ -142,6 +143,7 @@ model Room {
   updatedAt     DateTime   @updatedAt
 
   listingStatus ListingStatus @default(DRAFT)
+  listingTitle String? @db.VarChar(150)
   floorArea Decimal? @db.Decimal(7, 2)
   amenities String? @db.VarChar(500)
   bookingRequests BookingRequest[]
@@ -423,6 +425,7 @@ model BookingRequest {
   updatedAt DateTime @updatedAt
   room Room @relation(fields: [roomId], references: [id])
   user User @relation(fields: [userId], references: [id])
+  messages BookingMessage[]
   @@index([userId, createdAt])
   @@index([roomId, status])
   @@unique([roomId, holdFlag])
@@ -469,4 +472,16 @@ model MeterEvidence {
   createdAt DateTime @default(now())
   reading MeterReading @relation(fields: [readingId], references: [id], onDelete: Cascade)
   @@unique([readingId, kind])
+}
+
+model BookingMessage {
+  id String @id @default(uuid()) @db.Char(36)
+  bookingId String @db.Char(36)
+  authorId String @db.Char(36)
+  body String @db.VarChar(1000)
+  createdAt DateTime @default(now())
+  booking BookingRequest @relation(fields: [bookingId], references: [id])
+  author User @relation(fields: [authorId], references: [id])
+  @@index([bookingId, createdAt])
+  @@index([authorId])
 }

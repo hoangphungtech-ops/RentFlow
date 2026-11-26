@@ -36,3 +36,5 @@ node test/rbac-all.cjs
 Đặt thêm `RENTFLOW_FULL_UI=1` để chạy các ca tạo phòng, đặt lịch, phát hành hóa đơn và ghi nhận khoản thu. Chỉ bật chế độ này trên database demo mới vì các ca kiểm thử tạo nghiệp vụ mẫu. Đặt `RENTFLOW_SCREENSHOTS` thành đường dẫn thư mục nếu muốn lưu ảnh. Cần `pdfinfo` để xác nhận PDF đúng một trang A4.
 
 Bản bàn giao đã chạy Next.js, NestJS, Prisma, MySQL và Chromium trên Linux đám mây. Docker Desktop và PowerShell Windows cần xác nhận trên máy đích. Xem ảnh chụp và log trong thư mục `docs/full-ui-evidence` đi kèm ZIP.
+
+Sau khi đăng nhập bằng `testnguoidung`, cổng mở ở **Tìm phòng phù hợp**. Có thể thử tìm `studio an binh` và lọc **Còn trống**, rồi mở ảnh hoặc gửi yêu cầu. Mục **Trao đổi** hiển thị tin nhắn theo từng yêu cầu và dùng chung dữ liệu với chủ trọ hoặc quản lý được phân công. Khi chuyển tài khoản trên cùng trình duyệt, đăng xuất trước rồi đăng nhập bằng tài khoản mới. Tài khoản demo cũ `manager.demo@rentflow.test` có quyền OWNER. Dùng `testquanly` để thử cổng MANAGER.

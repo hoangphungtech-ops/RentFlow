@@ -10,6 +10,7 @@ import { Action, api, ApiError, field, select, vnd } from '../shared'
 import { AccountSettings } from './accounts'
 import { RoomList } from './rooms'
 import { AdminForms } from './forms'
+import { OwnerOperations } from './owner-operations'
 
 type Person = { id: string; fullName: string; propertyId: string }
 type RoomImage = { id: string; alt: string; mimeType: string; sizeBytes: number; width: number; height: number; isPrimary: boolean }
@@ -53,7 +54,7 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
   const [overview, setOverview] = useState<Overview>()
   const [ledger, setLedger] = useState<Ledger>()
   const [current, setCurrent] = useState('')
-  const [tab, setTab] = useState('Tổng quan')
+  const [tab, setTab] = useState(portal === 'user' ? 'Tìm phòng' : 'Tổng quan')
   const [roomStatus, setRoomStatus] = useState('')
   const [debtOnly, setDebtOnly] = useState(false)
   const [ready, setReady] = useState(false)
@@ -116,6 +117,8 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
   const canConfirm = role === 'OWNER' || role === 'ACCOUNTANT'
   const rooms = overview?.properties.flatMap(property => property.rooms) ?? []
   const unpaid = overview?.invoices.filter(row => invoiceBalance(row) > 0) ?? []
+  const latestInvoice = overview?.invoices.filter(invoice => invoice.status !== 'CANCELLED')
+    .reduce<Invoice | undefined>((latest, invoice) => !latest || invoice.billingPeriod > latest.billingPeriod ? invoice : latest, undefined)
   const printInvoice = ledger?.invoices.find(invoice => invoice.id === printId)
   const now = new Date()
   const today = localDay.format(now)
@@ -138,7 +141,7 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   const tabsByPortal = {
-    user: ['Tổng quan', 'Tìm phòng', 'Yêu cầu thuê', 'Bảo trì', 'Hóa đơn & thanh toán', 'Hợp đồng', 'Thông báo', 'Cài đặt'],
+    user: ['Tìm phòng', 'Yêu cầu của tôi', 'Phản hồi', 'Trao đổi', 'Tổng quan', 'Hóa đơn & thanh toán', 'Hợp đồng', 'Bảo trì', 'Thông báo', 'Cài đặt'],
     owner: ['Tổng quan', 'Khu trọ & phòng', 'Đăng phòng', 'Yêu cầu thuê', 'Bảo trì', 'Người thuê', 'Hợp đồng', 'Điện nước', 'Hóa đơn & thanh toán', 'Tiền cọc', 'Thông báo', 'Cài đặt'],
     manager: ['Tổng quan', 'Khu trọ & phòng', 'Đăng phòng', 'Yêu cầu thuê', 'Bảo trì', 'Người thuê', 'Hợp đồng', 'Điện nước', 'Hóa đơn & thanh toán', 'Thông báo', 'Cài đặt'],
     staff: ['Tổng quan', 'Khu trọ & phòng', 'Hợp đồng', 'Điện nước', 'Bảo trì', 'Thông báo', 'Cài đặt'],
@@ -158,10 +161,10 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
     setPrintId('')
   }
   return <>
-    <div className={portal ? 'workspace' : undefined}>
+    <div className={portal === 'user' ? 'workspace renter-workspace' : portal === 'owner' ? 'workspace owner-workspace' : portal ? 'workspace' : undefined}>
     {portal && <PortalSidebar label={portalLabels[portal]} sections={overview ? tabs : []} active={tab} onSelect={item => selectTab(item)} />}
     <div className="workspace-content">
-    <header className="mast"><Link href="/" className="brand">RentFlow</Link>{overview && <span className="workspace-user">{overview.actor.fullName}</span>}{signedIn && <button className="ghost" onClick={async () => {
+    <header className="mast"><Link href="/" className="brand">RentFlow</Link>{overview && <span className="workspace-user">{portal === 'user' ? 'Xin chào, ' : ''}{overview.actor.fullName}</span>}{signedIn && <button className="ghost" onClick={async () => {
       try { await api('logout', token, {}) }
       catch (error) { if (!(error instanceof ApiError && error.status === 401)) { setError((error as Error).message); return } }
       signOut()
@@ -179,11 +182,14 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
       {busy && <p role="status">Đang tải…</p>}
       {overview && <>
         {!portal && <nav aria-label="Quản lý">{tabs.map(item => <button key={item} aria-current={tab === item ? 'page' : undefined} onClick={() => selectTab(item)}>{item}</button>)}</nav>}
-        <h1>{tab}</h1>
-        {portal && portal !== 'accountant' && <PortalSection key={tab} tab={tab} role={portal === 'user' ? 'user' : 'manager'} overview={overview} refresh={refresh} />}
+        <h1>{portal === 'user' ? ({ 'Tìm phòng': 'Tìm phòng phù hợp', 'Yêu cầu của tôi': 'Yêu cầu đặt phòng của tôi', 'Trao đổi': 'Hộp thư trao đổi' } as Record<string, string>)[tab] ?? tab : portal === 'owner' && tab === 'Tổng quan' ? 'Tổng quan vận hành' : tab}</h1>
+        {portal && portal !== 'accountant' && <PortalSection key={tab} tab={tab} role={portal === 'user' ? 'user' : 'manager'} overview={overview} refresh={refresh} navigate={selectTab} />}
         {tab === 'Cài đặt' && <AccountSettings actor={overview.actor} properties={overview.properties} tenants={overview.tenants} signedOut={signOut} />}
         {tab === 'Tổng quan' && <>
-          <div className="tiles">
+          {portal === 'owner' && <OwnerOperations occupied={rooms.filter(room => room.status === 'OCCUPIED').length}
+            total={rooms.length} available={rooms.filter(room => room.status === 'AVAILABLE').length} unpaid={unpaid.length}
+            balance={unpaid.reduce((sum, row) => sum + invoiceBalance(row), 0)} onOpen={selectTab} />}
+          {portal !== 'owner' && <div className="tiles">
             {tabs.includes('Khu trọ & phòng') && [
               { title: 'Tổng số phòng', status: '' },
               { title: 'Phòng đang thuê', status: 'OCCUPIED' },
@@ -199,7 +205,7 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
             </article>}
             {!rooms.length && renter && <article><h2>Tìm phòng</h2><button className="ghost" onClick={() => selectTab('Tìm phòng')}>Xem phòng đang nhận yêu cầu</button></article>}
             {role === 'STAFF' && <article><h2>Công việc bảo trì</h2><button className="ghost" onClick={() => selectTab('Bảo trì')}>Xem việc được giao</button></article>}
-          </div>
+          </div>}
           <section aria-labelledby="tasks-title">
             <h2 id="tasks-title">Việc cần xử lý</h2>
             <div className="task-grid">
@@ -233,6 +239,10 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
               </article>
             </div>
           </section>
+          {portal === 'owner' && <section><h2>Quản lý theo khu vực</h2>
+            <RoomList properties={overview.properties} statuses={labels} openLease={open} refresh={refresh}
+              owner={false} demo={overview.demo} invoices={unpaid} leases={overview.leases} />
+          </section>}
         </>}
         {tab === 'Khu trọ & phòng' && <RoomList properties={overview.properties} statuses={labels} openLease={open} refresh={refresh} owner={role === 'OWNER' || role === 'MANAGER'} initialStatus={roomStatus}
           demo={overview.demo} invoices={role === 'STAFF' ? undefined : unpaid} leases={overview.leases} />}
@@ -240,6 +250,11 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
         {tab === 'Điện nước' && overview.properties.map(property => <section key={property.id} className="card"><h2>{property.name}</h2>{property.utilityRates.map(rate =>
           <p key={rate.id}>{rate.serviceName} · {vnd(rate.unitPrice)}/{rate.unit} · {date(rate.effectiveFrom)}</p>)}</section>)}
         {tab === 'Thông báo' && (overview.notifications.length ? <ul>{overview.notifications.map(row => <li key={row.id}>{row.message}</li>)}</ul> : <p>Chưa có thông báo.</p>)}
+        {portal === 'user' && tab === 'Hóa đơn & thanh toán' && latestInvoice && <section className="renter-invoice-summary">
+          <div><h2>Kỳ {latestInvoice.billingPeriod}</h2><InvoiceBadge status={latestInvoice.status} /></div>
+          <strong>{vnd(invoiceBalance(latestInvoice))}</strong><p>Hạn thanh toán {date(latestInvoice.dueDate)}</p>
+          <button className="ghost" onClick={() => open(latestInvoice.leaseId, true, latestInvoice.id, true)}>Xem chi tiết từng khoản</button>
+        </section>}
         {tab === 'Hóa đơn & thanh toán' && <section aria-label="Bảng kê hóa đơn">
           <h2>Bảng kê hóa đơn</h2>
           <label className="invoice-filter"><input type="checkbox" checked={debtOnly} onChange={event => setDebtOnly(event.target.checked)} /> Chỉ xem hóa đơn còn nợ</label>
@@ -312,6 +327,10 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
         {!renter && <AdminForms overview={overview} tab={tab} write={write} current={ledger?.id} />}
       </>}
     </main>
+    {portal === 'user' && overview && <nav className="renter-mobile-nav" aria-label="Điều hướng nhanh người thuê">
+      {[['Tìm phòng', 'Trang chủ'], ['Hóa đơn & thanh toán', 'Hóa đơn'], ['Hợp đồng', 'Hợp đồng'], ['Bảo trì', 'Báo sự cố']].map(([section, label]) =>
+        <button key={section} aria-current={tab === section ? 'page' : undefined} onClick={() => selectTab(section)}>{label}</button>)}
+    </nav>}
     </div>
     </div>
     {ledger && printInvoice && <article className="print-invoice">

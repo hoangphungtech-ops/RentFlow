@@ -8,6 +8,7 @@ export class ApiError extends Error {
 }
 export async function api<T>(path: string, token = '', body?: object, method?: string): Promise<T> {
   const response = await fetch('/api/' + path, {
+    cache: 'no-store',
     method: method ?? (body ? 'POST' : 'GET'),
     headers: { 'X-RentFlow-Web': '1', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
