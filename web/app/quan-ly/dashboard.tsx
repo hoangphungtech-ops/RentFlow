@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { PortalSection } from '../portal-sections'
+import { PortalSidebar } from '../portal-sidebar'
 import { MeterPhotos } from '../meter-photos'
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -143,7 +144,18 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
   const portalLabels = { user: 'Cổng người thuê', owner: 'Cổng chủ trọ', manager: 'Cổng quản lý khu trọ', staff: 'Cổng nhân viên', accountant: 'Cổng kế toán' }
   const activePortal = portal ?? (renter ? 'user' : 'owner')
   const tabs = tabsByPortal[activePortal]
+  function selectTab(item: string) {
+    setTab(item)
+    setLedger(undefined)
+    setCurrent('')
+    setError('')
+    setNotice('')
+    setPrintId('')
+  }
   return <>
+    <div className={portal ? 'workspace' : undefined}>
+    {portal && <PortalSidebar label={portalLabels[portal]} sections={overview ? tabs : []} active={tab} onSelect={selectTab} />}
+    <div className="workspace-content">
     <header className="mast"><Link href="/" className="brand">RentFlow</Link>{signedIn && <button className="ghost" onClick={async () => {
       try { await api('logout', token, {}) }
       catch (error) { if (!(error instanceof ApiError && error.status === 401)) { setError((error as Error).message); return } }
@@ -161,9 +173,8 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
       {error && <p className="error" role="alert">{error} <button className="ghost" onClick={() => location.reload()}>Tải lại</button></p>}
       {busy && <p role="status">Đang tải…</p>}
       {overview && <>
-        <nav aria-label="Quản lý">{tabs.map(item => <button key={item} aria-current={tab === item ? 'page' : undefined} onClick={() => { setTab(item); setLedger(undefined); setCurrent(''); setError(''); setNotice(''); setPrintId('') }}>{item}</button>)}</nav>
+        {!portal && <nav aria-label="Quản lý">{tabs.map(item => <button key={item} aria-current={tab === item ? 'page' : undefined} onClick={() => selectTab(item)}>{item}</button>)}</nav>}
         <h1>{tab}</h1>
-        {portal && <p className="portal-label">{portalLabels[portal]}</p>}
         {portal && portal !== 'accountant' && <PortalSection key={tab} tab={tab} role={portal === 'user' ? 'user' : 'manager'} overview={overview} refresh={refresh} />}
         <p className="muted">{overview.actor.fullName}</p>
         {tab === 'Cài đặt' && <AccountSettings actor={overview.actor} properties={overview.properties} tenants={overview.tenants} signedOut={signOut} />}
@@ -284,6 +295,8 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
         {!renter && <AdminForms overview={overview} tab={tab} write={write} current={ledger?.id} />}
       </>}
     </main>
+    </div>
+    </div>
     {ledger && printInvoice && <article className="print-invoice">
       <p className="brand">RentFlow</p>
       <h1>Hóa đơn thuê trọ {printInvoice.billingPeriod}</h1>
