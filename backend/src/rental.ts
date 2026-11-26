@@ -213,11 +213,16 @@ export class RentalController {
   async activate(@Req() { actor }: SessionRequest, @Param('leaseId') leaseId: string) {
     allow(actor, 'OWNER');
     return atomic(async tx => {
-      const lease = found(await tx.lease.findFirst({ where: { id: leaseId, ...leaseScope(actor) }, include: { room: true, _count: { select: { tenants: true } } } }));
+      const lease = found(await tx.lease.findFirst({ where: { id: leaseId, ...leaseScope(actor) }, include: { room: true, tenants: { include: { tenant: { select: { userId: true } } } }, _count: { select: { tenants: true } } } }));
       requireCondition(lease.status === 'DRAFT', 'Chỉ kích hoạt hợp đồng nháp');
       requireCondition(lease._count.tenants > 0 && lease._count.tenants <= lease.room.maxOccupants, 'Danh sách người ở vượt sức chứa hoặc còn thiếu');
       const existing = await tx.lease.count({ where: { roomId: lease.roomId, status: { in: ['ACTIVE', 'EXPIRED'] } } });
       requireCondition(!existing && lease.room.status === 'AVAILABLE', 'Phòng đang thuê hoặc bảo trì');
+      const held = await tx.bookingRequest.findFirst({ where: { roomId: lease.roomId, holdFlag: 1 } });
+      if (held) {
+        requireCondition(held.status === 'CONFIRMED' && lease.tenants.some(link => link.tenant.userId === held.userId && link.representative), 'Phòng đã được giữ cho người thuê khác hoặc yêu cầu chưa được xác nhận.');
+        await tx.bookingRequest.update({ where: { id: held.id }, data: { holdFlag: null } });
+      }
       await tx.room.update({ where: { id: lease.roomId }, data: { status: 'OCCUPIED' } });
       const updated = await tx.lease.update({ where: { id: leaseId }, data: { status: 'ACTIVE' } });
       await audit(tx, actor, 'LEASE_ACTIVATED', leaseId);

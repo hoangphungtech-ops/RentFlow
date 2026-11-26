@@ -9,6 +9,7 @@ import { db, SessionGuard } from './auth';
 import { AccountAuthentication, AccountManagement } from './accounts';
 import { PublicController, RentalController } from './rental';
 import { RoomImagesController } from './room-images';
+import { RentFlowV10Controller, RentFlowRegistration } from './v10';
 
 @Catch(Prisma.PrismaClientKnownRequestError)
 class DatabaseError implements ExceptionFilter {
@@ -21,7 +22,7 @@ class DatabaseError implements ExceptionFilter {
   }
 }
 
-@Module({ controllers: [PublicController, RentalController, AccountAuthentication, AccountManagement, RoomImagesController], providers: [SessionGuard] })
+@Module({ controllers: [PublicController, RentalController, AccountAuthentication, AccountManagement, RoomImagesController, RentFlowV10Controller, RentFlowRegistration], providers: [SessionGuard] })
 class AppModule {}
 
 async function bootstrap() {

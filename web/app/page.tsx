@@ -5,7 +5,7 @@ import { Trial } from './trial'
 
 export default function Home() {
   return <>
-    <header className="mast"><Link href="/" className="brand">RentFlow</Link><Link className="button ghost" href="/quan-ly">Đăng nhập</Link></header>
+    <header className="mast"><Link href="/" className="brand">RentFlow</Link><Link className="button ghost" href="/login">Đăng nhập</Link></header>
     <main className="landing">
       <section className="hero"><div>
         <p className="eyebrow">QUẢN LÝ NHÀ TRỌ</p>

@@ -30,7 +30,7 @@ const MAX_PIXELS = 24_000_000;
 const MAX_IMAGES_PER_ROOM = 12;
 const IMAGE_KEY = /^[0-9a-f-]{36}\.webp$/;
 
-type UploadedImage = { buffer: Buffer; mimetype: string; size: number };
+export type UploadedImage = { buffer: Buffer; mimetype: string; size: number };
 type ProcessedImage = { buffer: Buffer; width: number; height: number };
 
 function imageDirectory() {
@@ -38,12 +38,12 @@ function imageDirectory() {
   return join(resolve(configured), 'rooms');
 }
 
-function imagePath(storageKey: string) {
+export function imagePath(storageKey: string) {
   if (!IMAGE_KEY.test(storageKey)) throw new BadRequestException('Khóa ảnh không hợp lệ');
   return join(imageDirectory(), storageKey);
 }
 
-async function optimizeImage(file?: UploadedImage): Promise<ProcessedImage> {
+export async function optimizeImage(file?: UploadedImage): Promise<ProcessedImage> {
   if (!file?.buffer?.length) throw new BadRequestException('Vui lòng chọn ảnh phòng');
   if (file.size > MAX_UPLOAD_BYTES) throw new BadRequestException('Ảnh gốc tối đa 8 MB');
 

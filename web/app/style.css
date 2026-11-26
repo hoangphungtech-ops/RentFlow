@@ -72,3 +72,17 @@ details{border:1px solid var(--line);border-radius:.5rem;padding:.65rem;margin:.
   .print-invoice h1 { font-size:20pt }
   .print-invoice .invoice-table { min-width:0; margin:5mm 0; overflow-wrap:anywhere }
 }
+
+.portal-login { display: grid; grid-template-columns: 1fr 1.1fr; max-width: 960px; margin: 9vh auto; border-radius: 24px; overflow: hidden; background: white; border: 1px solid #dce8e2; box-shadow: 0 20px 70px #062e2220; }
+.portal-intro { padding: clamp(28px, 5vw, 58px); background: #073d30; color: #e3f9ef; }
+.portal-intro h1 { color: white; }
+.portal-logo { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: #c1f4db; color: #073d30; font-weight: 800; }
+.portal-login-form { padding: clamp(20px, 4vw, 48px); }
+.portal-login-form .fields { grid-template-columns: 1fr; }
+.portal-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
+.portal-label { color: #17624d; font-weight: 700; }
+.portal-pictures { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.portal-pictures img { width: min(230px, 100%); border-radius: 12px; object-fit: cover; aspect-ratio: 4 / 3; }
+.portal-pictures a { display: block; max-width: 100%; }
+@media (max-width: 650px) { .portal-login { margin: 14px; grid-template-columns: 1fr; } }
+@media print { .portal-label, .portal-actions { display: none !important; } }
