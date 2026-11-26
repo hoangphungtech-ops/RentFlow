@@ -6,6 +6,8 @@
         Referrer-Policy strict-origin-when-cross-origin
         X-Frame-Options DENY
     }
+    @demo path /demo /demo/*
+    respond @demo 404
     @api path /api/*
     reverse_proxy @api api:3001
     reverse_proxy web:3000

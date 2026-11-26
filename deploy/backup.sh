@@ -22,7 +22,9 @@ test -s "$dump"
 gzip -c "$dump" > "$archive"
 gzip -t "$archive"
 mv "$archive" "$output"
-compose cp api:/app/uploads/. "$images_dir"
+if [ -n "$(compose ps -a -q api)" ]; then
+  compose cp api:/app/uploads/. "$images_dir"
+fi
 tar -czf "$images_archive" -C "$images_dir" .
 tar -tzf "$images_archive" >/dev/null
 mv "$images_archive" "$images_output"
