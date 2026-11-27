@@ -7,9 +7,24 @@ async function request(path, options = {}) {
 }
 async function main() {
   const expected = [
+    ['testnguoidung', 'user'],
+    ['testchutro', 'owner'],
+    ['testquanly', 'manager'],
+    ['testadmin', 'admin'],
+    ['testnhanvien', 'staff'],
+    ['testketoan', 'accountant'],
+    ['testnguoidung2', 'user'],
+    ['testchutro2', 'owner'],
+    ['testquanly2', 'manager'],
+    ['owner.a@rentflow.test', 'owner'],
+    ['owner.b@rentflow.test', 'owner'],
+    ['renter.a@rentflow.test', 'user'],
+    ['renter.b@rentflow.test', 'user'],
+    ['staff.a@rentflow.test', 'staff'],
+    ['accountant.a@rentflow.test', 'accountant'],
     ['user.demo@rentflow.test', 'user'],
+    ['manager.demo@rentflow.test', 'owner'],
     ['admin.demo@rentflow.test', 'admin'],
-    ['manager.demo@rentflow.test', 'manager'],
   ];
   const results = [];
   for (const [identifier, portal] of expected) {
@@ -24,10 +39,17 @@ async function main() {
     const me = await request('/v10/me',{headers:{cookie,'X-RentFlow-Web':'1'}});
     const actor = await me.json();
     if (!me.ok || actor.portal !== portal) throw new Error(identifier + ' expected portal ' + portal);
-    const allowedPath = portal === 'admin' ? '/v10/admin' : portal === 'user' ? '/v10/user' : '/v10/manager';
+    const allowedPath = ({
+      admin: '/v10/admin',
+      user: '/v10/user',
+      owner: '/v10/owner/operations',
+      manager: '/v10/manager',
+      staff: '/v10/manager',
+      accountant: '/overview'
+    })[portal];
     const allowed = await request(allowedPath,{headers:{cookie,'X-RentFlow-Web':'1'}});
     if (!allowed.ok) throw new Error(identifier + ' own portal returned ' + allowed.status);
-    const deniedPath = portal === 'user' ? '/v10/admin' : portal === 'manager' ? '/v10/admin' : '/v10/user';
+    const deniedPath = portal === 'admin' ? '/v10/user' : '/v10/admin';
     const denied = await request(deniedPath,{headers:{cookie,'X-RentFlow-Web':'1'}});
     if (denied.status !== 403) throw new Error(identifier + ' denied API returned ' + denied.status);
     results.push({account:identifier, portal:actor.portal, login:login.status, ownPortal:allowed.status, forbidden:denied.status});
