@@ -1,0 +1,6 @@
+﻿ADMIN UI TEST - 27/11/2026
+PASS - Danh sách tin phòng
+PASS - Tải ảnh phòng
+PASS - Mở ảnh lớn
+PASS - Nút duyệt và từ chối
+RESULT: 4/4 PASS

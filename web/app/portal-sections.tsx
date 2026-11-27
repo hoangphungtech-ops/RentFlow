@@ -73,7 +73,47 @@ export function PortalSection({tab,role,overview,refresh,navigate}:{tab:string;r
           { ...field('amenities', 'Tiện nghi', 'text', true), value: room.amenities ?? '' },
         ]} submit={async value => { await api('v10/manager/rooms/' + room.id + '/listing', '', value); await load() }} />
       </article>)}
-      {tab==='Yêu cầu thuê'&&d?.bookings.map(row=><article key={row.id} className="card">{row.room.roomCode} · {row.user.fullName} · {stateLabel(row.status)}<button onClick={async()=>{await api('v10/manager/bookings/'+row.id,'',{approve:true});await load()}}>Duyệt</button><button onClick={async()=>{await api('v10/manager/bookings/'+row.id,'',{approve:false});await load()}}>Từ chối</button><button className="ghost" aria-expanded={thread === row.id} onClick={() => setThread(thread === row.id ? '' : row.id)}>Trao đổi</button>{thread === row.id && <BookingThread booking={row} />}</article>)}
+      {tab === 'Yêu cầu thuê' && d?.bookings.map(row => (
+        <article key={row.id} className="card">
+          <p>
+            {row.room.roomCode} · {row.user.fullName} · {stateLabel(row.status)}
+          </p>
+
+          {row.status === 'PENDING' ? (
+            <>
+              <button onClick={async () => {
+                await api('v10/manager/bookings/' + row.id, '', {
+                  approve: true
+                });
+                await load();
+              }}>
+                Duyệt
+              </button>
+
+              <button onClick={async () => {
+                await api('v10/manager/bookings/' + row.id, '', {
+                  approve: false
+                });
+                await load();
+              }}>
+                Từ chối
+              </button>
+            </>
+          ) : (
+            <p>Yêu cầu đã được xử lý.</p>
+          )}
+
+          <button
+            className="ghost"
+            aria-expanded={thread === row.id}
+            onClick={() => setThread(thread === row.id ? '' : row.id)}
+          >
+            Trao đổi
+          </button>
+
+          {thread === row.id && <BookingThread booking={row} />}
+        </article>
+      ))}
       {tab==='Bảo trì' && d && !d.maintenance.length && <p>Chưa có công việc bảo trì trong phạm vi.</p>}
       {tab==='Bảo trì'&&d?.maintenance.map(row=><article key={row.id} className="card">
         <h3>{row.title}</h3><p>{stateLabel(row.status)}</p>
