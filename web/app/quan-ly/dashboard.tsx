@@ -11,7 +11,7 @@ import { AccountSettings } from './accounts'
 import { RoomList } from './rooms'
 import { AdminForms } from './forms'
 import { OwnerOperations } from './owner-operations'
-
+import { VietQrBox } from '../vietqr'
 type Person = { id: string; fullName: string; propertyId: string }
 type RoomImage = { id: string; alt: string; mimeType: string; sizeBytes: number; width: number; height: number; isPrimary: boolean }
 type Room = { id: string; roomCode: string; status: string; baseRentPrice: string; maxOccupants: number; occupantCount: number; activeLeaseCount: number; images: RoomImage[] }
@@ -21,7 +21,7 @@ type Item = { id: string; description: string; meterStart: string | null; meterE
 type Invoice = { id: string; leaseId: string; billingPeriod: string; dueDate: string; totalAmount: string; paidAmount: string; remainingAmount: string; status: string; cancelReason: string | null }
 type InvoiceDetail = Invoice & { items: Item[]; payments: Payment[] }
 type Ledger = Lease & {
-  room: Lease['room'] & { property: { name: string } }
+  room: Lease['room'] & { property: { id?: string; name: string; bankBin?: string | null; bankAccountNo?: string | null; bankAccountName?: string | null } }
   invoices: InvoiceDetail[]
   handovers: { kind: string; date: string; condition: string; inventory: string; electric: string; water: string; notes: string | null; confirmedAt: string | null }[]
   settlement: { received: string; deduction: string; debtOffset: string; refund: string; reason: string; invoiceId?: string } | null
@@ -311,6 +311,16 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
                 {['OWNER', 'ACCOUNTANT'].includes(role ?? '') && payment.method !== 'DEPOSIT' && payment.status === 'CONFIRMED' && <Action title="Đảo khoản thu" fields={[field('reason', 'Lý do')]} submit={values => write('payments/' + payment.id + '/reverse', values)} />}
               </div>)}
             </details>
+            {invoiceBalance(invoice) > 0 && invoice.status !== 'CANCELLED' && (
+           <VietQrBox
+             bankBin={ledger.room.property.bankBin}
+             bankAccountNo={ledger.room.property.bankAccountNo}
+             bankAccountName={ledger.room.property.bankAccountName}
+             amount={invoiceBalance(invoice)}
+             roomCode={ledger.room.roomCode}
+             billingPeriod={invoice.billingPeriod}
+           />
+         )}
             {invoiceBalance(invoice) > 0 && ['OWNER', 'ACCOUNTANT', 'RENTER'].includes(role ?? '') && <Action title="Báo thanh toán" fields={[field('amount','Số tiền','number'), select('method','Phương thức',[['TRANSFER','Chuyển khoản'],['CASH','Tiền mặt']])]} submit={async values => {
               const key = invoice.id + ':' + values.amount + ':' + values.method
               const requestKey = paymentRequest.current.get(key) ?? crypto.randomUUID()
@@ -342,6 +352,16 @@ export default function Dashboard({ portal }: { portal?: 'user' | 'manager' | 'o
       {printInvoice.cancelReason && <p>Lý do hủy: {printInvoice.cancelReason}</p>}
       <InvoiceItems items={printInvoice.items} />
       <p>Tổng {vnd(printInvoice.totalAmount)} · Đã thu {vnd(printInvoice.paidAmount)} · <strong>Còn nợ {vnd(invoiceBalance(printInvoice))}</strong></p>
+    {invoiceBalance(printInvoice) > 0 && printInvoice.status !== 'CANCELLED' && ledger.room.property.bankBin && ledger.room.property.bankAccountNo && (
+        <VietQrBox
+          bankBin={ledger.room.property.bankBin}
+          bankAccountNo={ledger.room.property.bankAccountNo}
+          bankAccountName={ledger.room.property.bankAccountName}
+          amount={invoiceBalance(printInvoice)}
+          roomCode={ledger.room.roomCode}
+          billingPeriod={printInvoice.billingPeriod}
+        />
+      )}
     </article>}
   </>
 }

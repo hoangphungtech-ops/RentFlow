@@ -193,6 +193,28 @@ return {
     });
   }
 
+  @Post('manager/properties/:id/bank')
+  async propertyBank(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) propertyId: string, @Body() body: unknown) {
+    allow(actor, 'OWNER');
+    const data = parse(z.object({
+      bankBin: z.string().trim().regex(/^\d{6}$/, 'Mã BIN ngân hàng gồm 6 chữ số.'),
+      bankAccountNo: z.string().trim().regex(/^[A-Za-z0-9]{6,25}$/, 'Số tài khoản từ 6 đến 25 ký tự.'),
+      bankAccountName: label(120),
+    }).strict(), body);
+    return atomic(async tx => {
+      found(await tx.property.findFirst({ where: { id: propertyId, ...propertyScope(actor) } }));
+      const result = await tx.property.update({
+        where: { id: propertyId },
+        data: {
+          bankBin: data.bankBin,
+          bankAccountNo: data.bankAccountNo.toUpperCase(),
+          bankAccountName: data.bankAccountName.toUpperCase(),
+        },
+      });
+      await audit(tx, actor, 'PROPERTY_BANK_UPDATED', propertyId);
+      return result;
+    });
+  }
   @Post('manager/rooms/:id/listing')
   async publish(@Req() { actor }: SessionRequest, @Param('id', ParseUUIDPipe) roomId: string, @Body() body: unknown) {
     allow(actor, 'OWNER', 'MANAGER', 'STAFF');
