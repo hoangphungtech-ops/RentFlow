@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Action, field, select } from '../shared'
 import { matchesVietnameseSearch } from '../vietnamese-search'
 import type { Overview, Write } from './page'
-
+import { VIETQR_BANKS } from '../vietqr'
 const n = (key: string, label: string) => field(key, label, 'number')
 const d = (key: string, label: string) => field(key, label, 'date')
 const propertyField = 'propertyId'
@@ -91,6 +91,12 @@ export function AdminForms({ overview, tab, current, write }: { overview: Overvi
   if (tab === 'Khu trọ & phòng' && manages) return <div className="forms">
     {owner && <Action title="Tạo khu trọ" fields={[field('name','Tên khu'), field('address','Địa chỉ')]} submit={values => write('properties', values)} />}
     {owner && <Action title="Cập nhật khu trọ" fields={[property, field('name','Tên khu'), field('address','Địa chỉ')]} submit={scoped('v10/manager/properties', propertyField)} />}
+    {owner && <Action title="Cài đặt VietQR nhận tiền" fields={[
+     property,
+     select('bankBin', 'Ngân hàng', VIETQR_BANKS),
+     { ...field('bankAccountNo', 'Số tài khoản'), placeholder: 'Ví dụ: 0987654321' },
+     { ...field('bankAccountName', 'Tên chủ tài khoản'), placeholder: 'Ví dụ: NGUYEN VAN MINH' },
+   ]} submit={scoped('v10/manager/properties', propertyField, '/bank')} />}
     <Action title="Tạo phòng" fields={[property, field('roomCode','Mã phòng'), n('baseRentPrice','Giá thuê'), n('maxOccupants','Sức chứa'), { ...select('status','Trạng thái',[['AVAILABLE','Trống'],['MAINTENANCE','Bảo trì']]), value: 'AVAILABLE' }]} submit={scoped('properties', propertyField, '/rooms')} />
     <Action title="Cập nhật phòng" fields={[rooms, n('baseRentPrice','Giá thuê mới'), n('maxOccupants','Sức chứa'), select('status','Trạng thái',[['AVAILABLE','Trống'],['MAINTENANCE','Bảo trì'],['OCCUPIED','Đang thuê']])]} submit={scoped('rooms','roomId','/settings')} />
   </div>

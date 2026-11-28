@@ -267,7 +267,7 @@ export class RentalController {
     const ledger = found(await db.lease.findFirst({
       where: { id: leaseId, ...leaseScope(actor) },
       include: {
-        room: { select: { roomCode: true, property: { select: { name: true } } } },
+        room: { select: { roomCode: true, property: { select: { id: true, name: true, bankBin: true, bankAccountNo: true, bankAccountName: true } } } },
         tenants: { select: { representative: true, tenant: { select: { fullName: true } } } },
         handovers: true, settlement: true,
         invoices: { where: { status: { notIn: canSeeCancelled ? ['DRAFT'] : ['DRAFT', 'CANCELLED'] } }, include: { items: true, payments: true }, orderBy: [{ billingPeriod: 'desc' }, { createdAt: 'desc' }] },

@@ -36,6 +36,12 @@ async function seed() {
       const renterId = ids.get('testnguoidung' + suffix)!;
       const property = await tx.property.upsert({ where: { id: propertyId }, update: {}, create: { id: propertyId, name, address, ownerId } });
       if (property.ownerId !== ownerId) throw new Error('Khu demo đã thuộc chủ khác.');
+      await tx.property.updateMany({
+        where: { id: propertyId, bankAccountNo: null },
+        data: suffix
+          ? { bankBin: '970436', bankAccountNo: '0123456789', bankAccountName: 'CHU TRO AN DEMO' }
+          : { bankBin: '970422', bankAccountNo: '0987654321', bankAccountName: 'CHU TRO MINH DEMO' },
+      });
       const staff = suffix ? ['testquanly2'] : ['testquanly', 'testnhanvien', 'testketoan'];
       for (const username of staff) {
         const userId = ids.get(username)!;

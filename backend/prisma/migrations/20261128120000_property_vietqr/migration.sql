@@ -1,0 +1,4 @@
+ALTER TABLE `Property`
+  ADD COLUMN `bankBin` VARCHAR(16) NULL,
+  ADD COLUMN `bankAccountNo` VARCHAR(32) NULL,
+  ADD COLUMN `bankAccountName` VARCHAR(120) NULL;
